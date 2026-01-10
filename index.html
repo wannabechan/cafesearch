@@ -1712,14 +1712,20 @@
             const locationButton = document.getElementById('locationButton');
             const loadingEl = document.getElementById('loading');
             const errorEl = document.getElementById('error');
+            const resultsSection = document.getElementById('resultsSection');
+            const cafeList = document.getElementById('cafeList');
+            const resultsHeader = document.getElementById('resultsHeader');
             
             // 버튼 비활성화
             locationButton.disabled = true;
             locationButton.textContent = '⏳';
             
-            // UI 초기화
+            // UI 초기화 - 기존 카페 목록 제거
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
+            resultsSection.style.display = 'none';
+            cafeList.innerHTML = '';
+            resultsHeader.textContent = '';
             
             try {
                 // Geolocation API로 현재 위치 가져오기
