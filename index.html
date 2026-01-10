@@ -50,13 +50,14 @@
 
         .search-box {
             display: flex;
+            flex-direction: column;
             gap: 12px;
             max-width: 600px;
             margin: 0 auto;
         }
 
         .search-input {
-            flex: 1;
+            width: 100%;
             padding: 16px 20px;
             font-size: 16px;
             border: 1px solid #dfe1e5;
@@ -65,12 +66,19 @@
             transition: all 0.2s;
         }
 
+        .search-buttons {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
         .search-input:focus {
             border-color: #4285f4;
             box-shadow: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
         }
 
         .search-button {
+            flex: 1;
             padding: 16px 32px;
             font-size: 16px;
             background-color: #4285f4;
@@ -91,6 +99,7 @@
         }
 
         .location-button {
+            flex: 0 0 auto;
             padding: 16px 20px;
             font-size: 20px;
             background-color: #34a853;
@@ -318,15 +327,24 @@
             }
 
             .search-box {
-                flex-direction: column;
                 gap: 10px;
                 max-width: 100%;
+            }
+
+            .search-buttons {
+                flex-direction: column;
+                gap: 10px;
             }
 
             .search-input {
                 padding: 14px 18px;
                 font-size: 16px; /* iOS 줌 방지 */
                 border-radius: 20px;
+            }
+
+            .search-buttons {
+                flex-direction: column;
+                gap: 10px;
             }
 
             .search-button {
@@ -460,14 +478,17 @@
                 margin-bottom: 20px;
             }
 
-            .search-box {
+            .search-buttons {
                 flex-direction: row;
                 gap: 8px;
             }
 
-            .search-button,
+            .search-button {
+                flex: 1;
+            }
+
             .location-button {
-                width: auto;
+                flex: 0 0 auto;
                 min-width: 80px;
             }
         }
@@ -486,8 +507,10 @@
                     placeholder="주소 입력"
                     autocomplete="off"
                 >
-                <button id="searchButton" class="search-button">검색</button>
-                <button id="locationButton" class="location-button" title="현위치">📍</button>
+                <div class="search-buttons">
+                    <button id="searchButton" class="search-button">검색</button>
+                    <button id="locationButton" class="location-button" title="현위치">📍</button>
+                </div>
             </div>
         </div>
 
