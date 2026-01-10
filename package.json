@@ -1,0 +1,21 @@
+{
+  "name": "cafesearch",
+  "version": "1.0.0",
+  "description": "café explorer - 가까운 카페 검색 웹사이트",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "cafe",
+    "coffee",
+    "search",
+    "naver-map",
+    "kakao-api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.x"
+  }
+}

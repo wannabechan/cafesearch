@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "api/kakao.js": {
+      "maxDuration": 10
+    },
+    "api/naver.js": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/kakao",
+      "destination": "/api/kakao.js"
+    },
+    {
+      "source": "/api/naver",
+      "destination": "/api/naver.js"
+    }
+  ]
+}
