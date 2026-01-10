@@ -687,7 +687,7 @@
             return floorInfo;
         }
 
-        // 카페 특징 키워드 추출 (네이버 블로그 리뷰에서 실제 텍스트 분석, 최소 1개 ~ 최대 5개)
+        // 카페 특징 키워드 추출 (네이버 블로그 리뷰에서 실제 텍스트 분석, 최소 1개 ~ 최대 3개)
         async function extractCafeKeywords(cafeName, cafeAddress) {
             try {
                 // 카페 이름과 주소를 조합하여 검색어 생성
@@ -794,13 +794,13 @@
                     allTextLength: allText.length,
                     allTextSample: allText.substring(0, 200), // 처음 200자만 샘플
                     keywordScores,
-                    sortedKeywords: Object.entries(keywordScores).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                    sortedKeywords: Object.entries(keywordScores).sort((a, b) => b[1] - a[1]).slice(0, 3)
                 });
 
-                // 빈도 순으로 정렬하고 상위 5개 선택 (최대 5개)
+                // 빈도 순으로 정렬하고 상위 3개 선택 (최대 3개)
                 const sortedKeywords = Object.entries(keywordScores)
                     .sort((a, b) => b[1] - a[1]) // 빈도 내림차순
-                    .slice(0, 5) // 최대 5개
+                    .slice(0, 3) // 최대 3개
                     .map(([keyword]) => keyword);
 
                 // 최소 1개 이상이면 반환, 없으면 빈 배열 (강제 보충 금지)
@@ -837,7 +837,7 @@
             ];
             
             namePatterns.forEach(({ pattern, keyword }) => {
-                if (pattern.test(name) && keywords.length < 5 && !keywords.includes(keyword)) {
+                if (pattern.test(name) && keywords.length < 3 && !keywords.includes(keyword)) {
                     keywords.push(keyword);
                 }
             });
