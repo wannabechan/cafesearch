@@ -1,0 +1,32 @@
+# 환경 변수 파일 (절대 커밋하지 마세요!)
+.env
+.env.local
+.env.*.local
+# .env.example은 커밋해도 됨 (예제 파일)
+!.env.example
+
+# 로그 파일
+*.log
+npm-debug.log*
+
+# 의존성
+node_modules/
+
+# 빌드 결과
+.vercel
+.netlify
+dist/
+build/
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 환경 변수는 절대 커밋하지 마세요!
+# Vercel/Netlify에서 환경 변수로 설정합니다
