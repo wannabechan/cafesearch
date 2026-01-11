@@ -2046,11 +2046,28 @@
                 }
                 
                 const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
+                    // 먼저 일반 정확도로 시도 (더 빠르고 안정적)
+                    navigator.geolocation.getCurrentPosition(
+                        resolve, 
+                        (error) => {
+                            console.warn('일반 정확도 위치 가져오기 실패, 고정확도로 재시도:', error);
+                            // 실패 시 고정확도로 재시도
+                            navigator.geolocation.getCurrentPosition(
+                                resolve,
+                                reject,
+                                {
+                                    enableHighAccuracy: true,
+                                    timeout: 15000,
+                                    maximumAge: 60000 // 1분 이내 캐시된 위치 허용
+                                }
+                            );
+                        },
+                        {
+                            enableHighAccuracy: false, // 일반 정확도로 먼저 시도
+                            timeout: 10000,
+                            maximumAge: 60000 // 1분 이내 캐시된 위치 허용 (더 빠른 응답)
+                        }
+                    );
                 });
                 
                 const latitude = position.coords.latitude;
@@ -2064,23 +2081,36 @@
                         y: latitude
                     });
                     
+                    console.log('주소 변환 API 응답:', coordData);
+                    
                     if (coordData.documents && coordData.documents.length > 0) {
                         const doc = coordData.documents[0];
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
+                        // 도로명 주소 우선, 없으면 지번 주소
+                        const roadAddr = doc.road_address?.address_name || '';
+                        const addr = doc.address?.address_name || doc.address_name || '';
                         address = roadAddr || addr;
+                        
+                        console.log('추출된 주소:', { roadAddr, addr, final: address });
                     }
                     
-                    // 주소가 없으면 좌표 문자열 사용
-                    if (!address) {
+                    // 주소가 없거나 빈 문자열이면 좌표 문자열 사용
+                    if (!address || address.trim() === '') {
+                        console.warn('주소 변환 결과가 비어있음, 좌표 문자열 사용');
                         address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
                     }
                 } catch (error) {
-                    console.warn('주소 변환 실패, 좌표로 직접 검색:', error);
+                    console.error('주소 변환 실패:', error);
                     // 주소 변환 실패 시 좌표 문자열 사용
                     address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
+                }
+                
+                // 주소가 위도/경도 형식이면 검색하지 않고 에러 표시
+                if (address.startsWith('위도')) {
+                    loadingEl.style.display = 'none';
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = '주소를 찾을 수 없습니다. 다른 방법으로 검색해주세요.';
+                    addressInput.value = '';
+                    return;
                 }
                 
                 // 항상 입력창에 주소 표시
@@ -2097,7 +2127,7 @@
                 if (error.code === 1) {
                     errorMessage = '위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.';
                 } else if (error.code === 2) {
-                    errorMessage = '위치를 확인할 수 없습니다. GPS 신호를 확인해주세요.';
+                    errorMessage = '위치를 확인할 수 없습니다. 인터넷 연결과 위치 서비스를 확인해주세요. (실내에서는 정확도가 낮을 수 있습니다)';
                 } else if (error.code === 3) {
                     errorMessage = '위치 확인 시간이 초과되었습니다. 다시 시도해주세요.';
                 } else if (error.message) {
@@ -2106,6 +2136,11 @@
                 
                 errorEl.textContent = errorMessage;
                 console.error('위치 가져오기 오류:', error);
+                console.error('에러 상세:', {
+                    code: error.code,
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
             } finally {
                 // 버튼 활성화
                 locationButton.disabled = false;
