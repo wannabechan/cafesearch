@@ -211,23 +211,6 @@
         }
 
 
-        .cafe-keywords {
-            display: flex;
-            gap: 6px;
-            margin-left: 12px;
-            flex-wrap: wrap;
-        }
-
-        .cafe-keyword {
-            font-size: 11px;
-            color: #5f6368;
-            background-color: #f1f3f4;
-            padding: 3px 8px;
-            border-radius: 12px;
-            white-space: nowrap;
-        }
-
-
 
         .loading {
             text-align: center;
@@ -236,28 +219,47 @@
             font-size: 14px;
         }
 
-        .spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f1f3f4;
-            border-top-color: #4285f4;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 16px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .loading-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 60px 20px;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .progress-bar-wrapper {
+            width: 100%;
+            height: 8px;
+            background-color: #f1f3f4;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4285f4, #34a853);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #5f6368;
+            margin-bottom: 4px;
+        }
+
+        .progress-percentage {
+            font-size: 14px;
+            font-weight: 500;
+            color: #202124;
         }
 
         .error {
@@ -423,18 +425,6 @@
             }
 
 
-            .cafe-keywords {
-                margin-left: 0;
-                margin-top: 8px;
-                gap: 4px;
-            }
-
-            .cafe-keyword {
-                font-size: 10px;
-                padding: 2px 6px;
-            }
-
-
 
             .results-header {
                 font-size: 13px;
@@ -460,6 +450,18 @@
 
             .loading-container {
                 padding: 40px 16px;
+            }
+
+            .progress-container {
+                max-width: 100%;
+            }
+
+            .progress-text {
+                font-size: 12px;
+            }
+
+            .progress-percentage {
+                font-size: 13px;
             }
 
             .error {
@@ -586,21 +588,61 @@
 
         <div class="loading" id="loading" style="display: none;">
             <div class="loading-container">
-                <div class="spinner"></div>
-                <div>검색 중...</div>
+                <div class="progress-container">
+                    <div class="progress-text" id="progressText">검색 준비 중...</div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
             </div>
         </div>
         <div class="error" id="error" style="display: none;"></div>
     </div>
 
     <script>
-        // 제외할 프랜차이즈 카페 목록
+        // ============================================
+        // 설정 섹션 (하드코딩)
+        // ============================================
+        
+        // 1. 메뉴 연관 카테고리 그룹
+        const MENU_CATEGORY_GROUPS = ['카페']; // 카카오 API 검색에 사용할 카테고리 키워드
+        
+        // 2. 제외 필터링 단어 그룹
         const EXCLUDED_CAFES = ['스타벅스', '이디야', '컴포즈', '메가', 'MGC', '카페베네', '투썸', '매머드', '커피앳웍스', '백억커피', '할리스', '커피빈', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스'];
-
+        const EXCLUDED_CATEGORY_KEYWORDS = ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'];
+        
+        // 3. 슈퍼패스 단어 그룹 (필터링 우회용)
+        const SUPERPASS_KEYWORDS = []; // 카페는 슈퍼패스 키워드 없음
+        
+        // ============================================
+        // API 설정
+        // ============================================
+        
         // API 엔드포인트 (서버리스 함수 사용)
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3000/api'
             : '/api';
+
+        // ============================================
+        // 프로그레스바 업데이트 함수
+        // ============================================
+        
+        function updateProgress(percentage, text) {
+            const progressBar = document.getElementById('progressBar');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+            }
+            if (progressPercentage) {
+                progressPercentage.textContent = `${percentage}%`;
+            }
+            if (progressText && text) {
+                progressText.textContent = text;
+            }
+        }
 
         // 네이버 좌표계를 WGS84로 변환
         function naverToWGS84(mapx, mapy) {
@@ -687,26 +729,128 @@
             return R * c; // 미터 단위 거리
         }
 
-        // 프랜차이즈 카페인지 확인
+        // ============================================
+        // 필터링 함수
+        // ============================================
+        
+        // 제외할 프랜차이즈 카페인지 확인
         function isExcludedCafe(cafeName) {
             if (!cafeName) return false;
             const name = cafeName.toLowerCase();
             return EXCLUDED_CAFES.some(excluded => name.includes(excluded.toLowerCase()));
         }
-
-        // 카페 카테고리인지 확인 (브런치, 레스토랑, 음식점, 술집 제외)
+        
+        // 카페 카테고리인지 확인 (제외 필터링 단어 그룹 사용)
         function isCafeCategory(categoryName) {
             // 카테고리 정보가 없으면 허용 (기본적으로 카페 검색 결과이므로)
             if (!categoryName) return true;
             
             const category = categoryName.toLowerCase();
-            
-            // 제외할 카테고리만 체크 (명확히 제외할 것들만)
-            const excludedKeywords = ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'];
-            const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
+            const isExcluded = EXCLUDED_CATEGORY_KEYWORDS.some(keyword => category.includes(keyword));
             
             // 제외 키워드가 없으면 허용 (카페 검색 결과이므로 대부분 카페일 것)
             return !isExcluded;
+        }
+        
+        // 슈퍼패스 키워드가 매장명에 포함되어 있는지 확인
+        function hasSuperpassKeyword(placeName) {
+            if (!placeName || SUPERPASS_KEYWORDS.length === 0) return false;
+            const name = placeName.toLowerCase();
+            return SUPERPASS_KEYWORDS.some(keyword => name.includes(keyword.toLowerCase()));
+        }
+        
+        // ============================================
+        // 카카오 API 검색 함수 (4단계)
+        // ============================================
+        
+        // 카카오 API로 매장 검색 (메뉴 연관 카테고리 그룹 사용)
+        async function searchFromKakaoAPI(baseX, baseY, radius = 500) {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedCategory = categorySelect.value || MENU_CATEGORY_GROUPS[0];
+            
+            const cafeData = await callKakaoAPI('keyword', {
+                query: selectedCategory,
+                x: baseX,
+                y: baseY,
+                radius: radius,
+                size: 15
+            });
+            
+            return cafeData.documents || [];
+        }
+        
+        // ============================================
+        // 결과 처리 함수
+        // ============================================
+        
+        // 카카오 API 검색 결과 처리 및 필터링 (제외 필터링 단어 그룹 적용)
+        function processSearchResults(documents, baseX, baseY) {
+            return documents
+                .filter(doc => {
+                    // 카테고리 필터링
+                    const categoryName = doc.category_name || '';
+                    if (!isCafeCategory(categoryName)) {
+                        return false;
+                    }
+                    // 프랜차이즈 제외
+                    const cafeName = doc.place_name || '';
+                    return !isExcludedCafe(cafeName);
+                })
+                .map(doc => {
+                    const cafeX = parseFloat(doc.x);
+                    const cafeY = parseFloat(doc.y);
+                    const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
+                    
+                    const roadAddr = (doc.road_address && doc.road_address.address_name) 
+                        ? doc.road_address.address_name 
+                        : '';
+                    const addr = doc.address_name || '';
+                    const placeName = doc.place_name || '';
+                    const floorInfo = extractFloorInfo(placeName);
+                    
+                    return {
+                        name: placeName,
+                        address: addr,
+                        roadAddress: roadAddr,
+                        displayAddress: roadAddr || addr,
+                        floor: floorInfo,
+                        x: cafeX,
+                        y: cafeY,
+                        distance: distance,
+                        categoryName: doc.category_name || '',
+                        doc: doc
+                    };
+                })
+                .filter(cafe => cafe.distance <= 500)
+                .sort((a, b) => a.distance - b.distance);
+        }
+        
+        // 주소 재조회 공통 함수
+        async function enrichWithAddress(cafes) {
+            return Promise.all(cafes.map(async (cafe) => {
+                if (!cafe.roadAddress && cafe.x && cafe.y) {
+                    try {
+                        const coordData = await callKakaoAPI('coord2address', {
+                            x: cafe.x,
+                            y: cafe.y
+                        });
+                        
+                        if (coordData.documents?.length > 0) {
+                            const doc = coordData.documents[0];
+                            const roadAddr = (doc.road_address && doc.road_address.address_name) 
+                                ? doc.road_address.address_name 
+                                : '';
+                            if (roadAddr) {
+                                cafe.roadAddress = roadAddr;
+                                cafe.displayAddress = roadAddr;
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('주소 재조회 실패:', cafe.name, error);
+                    }
+                }
+                return cafe;
+            }));
         }
 
         // 층 정보 패턴들 (미리 컴파일하여 성능 최적화)
@@ -783,30 +927,9 @@
                 distanceEl.className = 'cafe-distance';
                 distanceEl.textContent = `${Math.round(cafe.distance)}m`;
                 
-                // 키워드 표시
-                const keywords = cafe.keywords || [];
-                const keywordsContainer = document.createElement('div');
-                keywordsContainer.className = 'cafe-keywords';
-                
-                // 성능 최적화: for...of 사용
-                for (const keyword of keywords) {
-                    const keywordEl = document.createElement('span');
-                    keywordEl.className = 'cafe-keyword';
-                    keywordEl.textContent = keyword;
-                    keywordsContainer.appendChild(keywordEl);
-                }
-                
-                const distanceContainer = document.createElement('div');
-                distanceContainer.style.display = 'flex';
-                distanceContainer.style.alignItems = 'center';
-                distanceContainer.appendChild(distanceEl);
-                if (keywords.length > 0) {
-                    distanceContainer.appendChild(keywordsContainer);
-                }
-                
                 li.appendChild(nameEl);
                 li.appendChild(addressEl);
-                li.appendChild(distanceContainer);
+                li.appendChild(distanceEl);
                 
                 fragment.appendChild(li);
             }
@@ -815,126 +938,6 @@
             cafeList.appendChild(fragment);
         }
 
-        // 카페 특징 키워드 추출 (네이버 블로그 리뷰에서 실제 텍스트 분석, 최소 1개 ~ 최대 3개)
-        async function extractCafeKeywords(cafeName, cafeAddress) {
-            try {
-                // 카페 이름과 주소를 조합하여 검색어 생성
-                const searchQuery = cafeAddress 
-                    ? `${cafeName} ${cafeAddress.split(' ').slice(0, 3).join(' ')}`
-                    : cafeName;
-                
-                // 네이버 블로그 검색 API 호출
-                const blogData = await callNaverAPI('blog', {
-                    query: searchQuery,
-                    display: 30, // 더 많은 블로그 포스트 검색
-                    sort: 'sim'  // 관련도순 정렬
-                });
-
-                if (!blogData.items || blogData.items.length === 0) {
-                    // 블로그 검색 실패 시 카페 이름에서 키워드 추출 시도
-                    console.warn('블로그 검색 결과 없음, 카페 이름에서 키워드 추출 시도:', cafeName);
-                    return extractKeywordsFromName(cafeName);
-                }
-
-                // 모든 블로그 포스트의 제목과 설명을 합쳐서 텍스트 분석
-                const allText = blogData.items
-                    .map(item => {
-                        // HTML 태그 제거
-                        const title = (item.title || '').replace(/<[^>]*>/g, ' ');
-                        const description = (item.description || '').replace(/<[^>]*>/g, ' ');
-                        return `${title} ${description}`;
-                    })
-                    .join(' ');
-
-                // 메뉴 관련 키워드 패턴 (간단하고 유연한 패턴으로 변경)
-                // 단어 경계 없이 단순하게 매칭
-                const menuPatterns = [
-                    // 디저트/케이크 관련
-                    { pattern: /케이크/gi, keyword: '케이크' },
-                    { pattern: /마카롱/gi, keyword: '마카롱' },
-                    { pattern: /브라우니/gi, keyword: '브라우니' },
-                    { pattern: /쿠키/gi, keyword: '쿠키' },
-                    { pattern: /파운드케이크|파운드/gi, keyword: '파운드케이크' },
-                    { pattern: /디저트/gi, keyword: '디저트' },
-                    { pattern: /타르트/gi, keyword: '타르트' },
-                    { pattern: /티라미수/gi, keyword: '티라미수' },
-                    { pattern: /초콜릿/gi, keyword: '초콜릿' },
-                    { pattern: /와플/gi, keyword: '와플' },
-                    
-                    // 커피/원두 관련
-                    { pattern: /원두/gi, keyword: '원두' },
-                    { pattern: /로스팅/gi, keyword: '로스팅' },
-                    { pattern: /드립커피|핸드드립|드립/gi, keyword: '드립' },
-                    { pattern: /에스프레소/gi, keyword: '에스프레소' },
-                    { pattern: /카페라떼|라떼/gi, keyword: '라떼' },
-                    { pattern: /아메리카노/gi, keyword: '아메리카노' },
-                    { pattern: /콜드브루/gi, keyword: '콜드브루' },
-                    { pattern: /카푸치노/gi, keyword: '카푸치노' },
-                    { pattern: /바닐라라떼|바닐라/gi, keyword: '바닐라라떼' },
-                    
-                    // 빵/베이커리 관련
-                    { pattern: /베이커리/gi, keyword: '베이커리' },
-                    { pattern: /베이글/gi, keyword: '베이글' },
-                    { pattern: /크루아상/gi, keyword: '크루아상' },
-                    { pattern: /바게트/gi, keyword: '바게트' },
-                    { pattern: /브레드/gi, keyword: '브레드' },
-                    // "빵"은 너무 일반적이어서 제외
-                    
-                    // 브런치 관련
-                    { pattern: /브런치/gi, keyword: '브런치' },
-                    { pattern: /에그베네딕트|베네딕트/gi, keyword: '에그베네딕트' },
-                    { pattern: /샐러드/gi, keyword: '샐러드' },
-                    { pattern: /파니니/gi, keyword: '파니니' },
-                    { pattern: /토스트/gi, keyword: '토스트' },
-                    
-                    // 차/티 관련 (일반적인 단어 제외, 구체적인 것만)
-                    { pattern: /허브티/gi, keyword: '허브티' },
-                    { pattern: /녹차/gi, keyword: '녹차' },
-                    { pattern: /홍차/gi, keyword: '홍차' },
-                    { pattern: /우롱차/gi, keyword: '우롱차' },
-                    { pattern: /밀크티/gi, keyword: '밀크티' },
-                    // "티"와 "차"는 너무 일반적이어서 제외
-                    
-                    // 특수 카페 유형
-                    { pattern: /펫카페|펫 카페/gi, keyword: '펫카페' },
-                    { pattern: /북카페|북 카페/gi, keyword: '북카페' }
-                ];
-
-                // 각 메뉴 키워드의 출현 빈도 계산 (성능 최적화: for...of 사용)
-                const keywordScores = {};
-                for (const { pattern, keyword } of menuPatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        // 이미 존재하면 빈도 추가, 없으면 새로 추가
-                        keywordScores[keyword] = (keywordScores[keyword] || 0) + matches.length;
-                    }
-                }
-
-                // 디버깅: 키워드 추출 결과 확인
-                console.log('키워드 추출 결과:', {
-                    cafeName,
-                    searchQuery,
-                    blogItemsCount: blogData.items?.length || 0,
-                    allTextLength: allText.length,
-                    allTextSample: allText.substring(0, 200), // 처음 200자만 샘플
-                    keywordScores,
-                    sortedKeywords: Object.entries(keywordScores).sort((a, b) => b[1] - a[1]).slice(0, 3)
-                });
-
-                // 빈도 순으로 정렬하고 상위 3개 선택 (최대 3개)
-                const sortedKeywords = Object.entries(keywordScores)
-                    .sort((a, b) => b[1] - a[1]) // 빈도 내림차순
-                    .slice(0, 3) // 최대 3개
-                    .map(([keyword]) => keyword);
-
-                // 최소 1개 이상이면 반환, 없으면 빈 배열 (강제 보충 금지)
-                return sortedKeywords.length > 0 ? sortedKeywords : [];
-            } catch (error) {
-                console.error('키워드 추출 실패:', error);
-                // 에러 발생 시 카페 이름에서 키워드 추출 시도
-                return extractKeywordsFromName(cafeName);
-            }
-        }
 
         // 카페 요약 설명 생성 (네이버 블로그 리뷰에서 50-70자 요약)
         async function extractCafeSummary(cafeName, cafeAddress) {
@@ -1212,39 +1215,6 @@
             }
         }
 
-        // 카페 이름에서 키워드 추출 (폴백)
-        function extractKeywordsFromName(cafeName) {
-            const keywords = [];
-            const name = (cafeName || '').toLowerCase();
-            
-            const namePatterns = [
-                { pattern: /케이크|cake/gi, keyword: '케이크' },
-                { pattern: /마카롱|macaron/gi, keyword: '마카롱' },
-                { pattern: /브라우니|brownie/gi, keyword: '브라우니' },
-                { pattern: /디저트|dessert/gi, keyword: '디저트' },
-                { pattern: /원두|bean/gi, keyword: '원두' },
-                { pattern: /로스팅|roasting/gi, keyword: '로스팅' },
-                { pattern: /드립|drip/gi, keyword: '드립' },
-                { pattern: /에스프레소|espresso/gi, keyword: '에스프레소' },
-                { pattern: /라떼|latte/gi, keyword: '라떼' },
-                { pattern: /아메리카노|americano/gi, keyword: '아메리카노' },
-                { pattern: /콜드브루|coldbrew/gi, keyword: '콜드브루' },
-                { pattern: /베이커리|bakery/gi, keyword: '베이커리' },
-                { pattern: /브런치|brunch/gi, keyword: '브런치' },
-                { pattern: /허브티|herbtea/gi, keyword: '허브티' },
-                { pattern: /펫|pet/gi, keyword: '펫카페' },
-                { pattern: /북|book/gi, keyword: '북카페' }
-            ];
-            
-            // 성능 최적화: for...of 사용
-            for (const { pattern, keyword } of namePatterns) {
-                if (pattern.test(name) && keywords.length < 3 && !keywords.includes(keyword)) {
-                    keywords.push(keyword);
-                }
-            }
-            
-            return keywords;
-        }
 
         // 카페 검색
         async function searchCafes(address) {
@@ -1259,9 +1229,11 @@
             errorEl.style.display = 'none';
             resultsSection.style.display = 'none';
             cafeList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
-                // 1단계: 카카오 API로 주소를 좌표로 변환 (정확한 주소 검색)
+                // 1단계: 카카오 API로 주소를 좌표로 변환
+                updateProgress(10, '주소 검색 중...');
                 const addressData = await callKakaoAPI('address', {
                     query: address,
                     size: 1
@@ -1272,196 +1244,45 @@
                 }
 
                 const location = addressData.documents[0];
-                const baseX = parseFloat(location.x); // 경도
-                const baseY = parseFloat(location.y); // 위도
-
-                // 2단계: 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
-                const radius = 500; // 500m
-                const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                const cafeData = await callKakaoAPI('keyword', {
-                    query: selectedCategory,
-                    x: baseX,
-                    y: baseY,
-                    radius: radius,
-                    size: 15
-                });
-
-                if (!cafeData.documents || cafeData.documents.length === 0) {
+                const baseX = parseFloat(location.x);
+                const baseY = parseFloat(location.y);
+                const radius = 500;
+                
+                // 4단계: 카카오 API로 매장 검색
+                updateProgress(30, '카카오 지도에서 매장 검색 중...');
+                const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
+                
+                if (allResults.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
-
-                // 3단계: 카페 카테고리 필터링, 프랜차이즈 제외 및 거리 계산
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        // 카테고리 필터링: 카페만 허용
-                        const categoryName = doc.category_name || '';
-                        if (!isCafeCategory(categoryName)) {
-                            return false;
-                        }
-                        // 프랜차이즈 제외
-                        const cafeName = doc.place_name || '';
-                        return !isExcludedCafe(cafeName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조: road_address 객체 안에 address_name이 있음
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500) // 500m 이내만
-                    .sort((a, b) => a.distance - b.distance); // 거리순 정렬
-
+                
+                // 결과 처리 및 필터링
+                updateProgress(50, '검색 결과 필터링 중...');
+                const cafes = processSearchResults(allResults, baseX, baseY);
+                
                 if (cafes.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
-
-                // 도로명 주소가 없는 카페들의 좌표로 주소 재조회 및 층 정보 가져오기
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    // 층 정보가 없으면 네이버 검색 API로 층 정보 가져오기
-                    if (!cafe.floor) {
-                        try {
-                            const searchQuery = cafe.displayAddress || cafe.roadAddress || cafe.address
-                                ? `${cafe.name} ${(cafe.displayAddress || cafe.roadAddress || cafe.address).split(' ').slice(0, 2).join(' ')}`
-                                : cafe.name;
-                            
-                            const naverResult = await callNaverAPI('local', {
-                                query: searchQuery,
-                                display: 1,
-                                sort: 'random'
-                            });
-                            
-                            if (naverResult.items && naverResult.items.length > 0) {
-                                const item = naverResult.items[0];
-                                const title = (item.title || '').replace(/<[^>]*>/g, '');
-                                const address = (item.address || '').replace(/<[^>]*>/g, '');
-                                const roadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
-                                
-                                // 제목, 주소에서 층 정보 추출
-                                const floorFromTitle = extractFloorInfo(title);
-                                const floorFromAddress = extractFloorInfo(address + ' ' + roadAddress);
-                                cafe.floor = floorFromTitle || floorFromAddress || '';
-                            }
-                        } catch (error) {
-                            console.warn('층 정보 조회 실패:', cafe.name, error);
-                            cafe.floor = cafe.floor || '';
-                        }
-                    }
-                    
-                    return cafe;
-                }));
-
-                // 네이버 검색 가능 여부 확인 및 카테고리 확인 (카페만 필터링)
-                const cafesSearchable = [];
-                for (let i = 0; i < cafesWithAddress.length; i++) {
-                    const cafe = cafesWithAddress[i];
-                    // API 호출 제한을 위해 약간의 지연 추가 (초당 5개 제한 고려)
-                    if (i > 0 && i % 5 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                    
-                    try {
-                        const isSearchable = await isSearchableOnNaver(cafe);
-                        if (isSearchable) {
-                            cafesSearchable.push(cafe);
-                            console.log(`네이버 검색 가능 및 카테고리 "카페" 확인 완료 [${cafe.name}]`);
-                        } else {
-                            console.log(`네이버 검색 불가능 또는 카테고리가 "카페"가 아님 - 리스팅 제외 [${cafe.name}]`);
-                        }
-                    } catch (error) {
-                        console.warn('네이버 검색 가능 여부 확인 실패:', cafe.name, error);
-                        // 에러 발생 시 검색 가능한 것으로 간주하지 않음 (카테고리 확인 실패 시 제외)
-                        console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                    }
-                }
-
-                // 각 카페에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
                 
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractCafeKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
+                // 주소 재조회
+                updateProgress(60, '주소 정보 보완 중...');
+                const cafesWithAddress = await enrichWithAddress(cafes);
+                
+                // 5단계: 네이버 검색 필터링
+                updateProgress(70, '네이버 지도에서 검색 확인 중...');
+                const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+                
+                updateProgress(100, '검색 완료!');
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
 
                 // 카페 목록 표시 (공통 함수 사용)
-                renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
+                renderCafeList(cafesSearchable, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
                 loadingEl.style.display = 'none';
@@ -1485,9 +1306,51 @@
             }
         }
 
-        // 네이버 검색 결과 가져오기 (층 정보, 검색 가능 여부, 카테고리 확인 통합)
+        // ============================================
+        // 네이버 검색 필터링 함수 (5단계)
+        // ============================================
+        
+        // 네이버 검색 결과 가져오기 (슈퍼패스 우회 로직 포함)
         async function getNaverSearchInfo(cafe) {
             try {
+                // 슈퍼패스 키워드가 있으면 필터링 우회
+                if (hasSuperpassKeyword(cafe.name)) {
+                    console.log('슈퍼패스 키워드 매장 - 네이버 검색 필터링 우회:', cafe.name);
+                    let floorInfo = cafe.floor || '';
+                    
+                    // 층 정보가 없으면 네이버 검색으로 조회 시도
+                    if (!floorInfo) {
+                        try {
+                            const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+                            const searchQuery = address
+                                ? `${cafe.name} ${address.split(' ').slice(0, 2).join(' ')}`
+                                : cafe.name;
+                            
+                            const naverResult = await callNaverAPI('local', {
+                                query: searchQuery,
+                                display: 1,
+                                sort: 'random'
+                            });
+                            
+                            if (naverResult.items?.length > 0) {
+                                const item = naverResult.items[0];
+                                const title = (item.title || '').replace(/<[^>]*>/g, '');
+                                const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
+                                const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
+                                
+                                const floorFromTitle = extractFloorInfo(title);
+                                const floorFromAddress = extractFloorInfo(resultAddress + ' ' + resultRoadAddress);
+                                floorInfo = floorFromTitle || floorFromAddress || '';
+                            }
+                        } catch (error) {
+                            console.warn('슈퍼패스 매장 층 정보 조회 실패:', cafe.name, error);
+                        }
+                    }
+                    
+                    return { isSearchable: true, floorInfo };
+                }
+                
+                // 일반 필터링 로직 진행
                 const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
                 
                 // 1차 검색: 매장명칭 + 주소
@@ -1578,6 +1441,57 @@
                 // 에러 발생 시 검색 가능한 것으로 간주하지 않음
                 return { isSearchable: false, floorInfo: cafe.floor || '' };
             }
+        }
+        
+        // 네이버 검색 및 필터링 공통 함수 (5단계)
+        async function processNaverSearchAndFilter(cafesWithAddress) {
+            const cafesSearchable = [];
+            const batchSize = 5;
+            const totalBatches = Math.ceil(cafesWithAddress.length / batchSize);
+            
+            for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
+                const batch = cafesWithAddress.slice(i, i + batchSize);
+                const currentBatch = Math.floor(i / batchSize) + 1;
+                
+                // 프로그레스 업데이트 (70% ~ 95%)
+                const progressPercent = 70 + Math.floor((currentBatch / totalBatches) * 25);
+                updateProgress(progressPercent, `네이버 지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (cafe) => {
+                        try {
+                            const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
+                            
+                            if (isSearchable) {
+                                if (floorInfo) {
+                                    cafe.floor = floorInfo;
+                                }
+                                console.log(`네이버 검색 가능 및 카테고리 확인 완료 [${cafe.name}]`);
+                                return cafe;
+                            } else {
+                                console.log(`네이버 검색 불가능 또는 카테고리가 맞지 않음 - 리스팅 제외 [${cafe.name}]`);
+                                return null;
+                            }
+                        } catch (error) {
+                            console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
+                            console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
+                            return null;
+                        }
+                    })
+                );
+                
+                for (const result of batchResults) {
+                    if (result) {
+                        cafesSearchable.push(result);
+                    }
+                }
+                
+                if (i + batchSize < cafesWithAddress.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            return cafesSearchable;
         }
 
         // 네이버맵으로 이동
@@ -1816,192 +1730,50 @@
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             resultsSection.style.display = 'none';
-            resultsHeader.textContent = ''; // 주소 후보 문구 제거
+            resultsHeader.textContent = '';
             cafeList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
-
-                // 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
                 const radius = 500;
-                const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                const cafeData = await callKakaoAPI('keyword', {
-                    query: selectedCategory,
-                    x: baseX,
-                    y: baseY,
-                    radius: radius,
-                    size: 15
-                });
-
-                if (!cafeData.documents || cafeData.documents.length === 0) {
+                
+                // 4단계: 카카오 API로 매장 검색
+                updateProgress(30, '카카오 지도에서 매장 검색 중...');
+                const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
+                
+                if (allResults.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
-
-                // 카페 카테고리 필터링, 프랜차이즈 제외 및 거리 계산
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        // 카테고리 필터링: 카페만 허용
-                        const categoryName = doc.category_name || '';
-                        if (!isCafeCategory(categoryName)) {
-                            return false;
-                        }
-                        // 프랜차이즈 제외
-                        const cafeName = doc.place_name || '';
-                        return !isExcludedCafe(cafeName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500)
-                    .sort((a, b) => a.distance - b.distance);
-
+                
+                // 결과 처리 및 필터링
+                updateProgress(50, '검색 결과 필터링 중...');
+                const cafes = processSearchResults(allResults, baseX, baseY);
+                
                 if (cafes.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
-
-                // 도로명 주소가 없는 카페들의 좌표로 주소 재조회
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    return cafe;
-                }));
-
-                // 네이버 검색 정보 조회 및 필터링 (층 정보 + 검색 가능 여부 + 카테고리 확인 통합)
-                // 배치 처리로 성능 개선 (5개씩 묶어서 병렬 처리)
-                const cafesSearchable = [];
-                const batchSize = 5;
                 
-                for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
-                    const batch = cafesWithAddress.slice(i, i + batchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
-                                
-                                if (isSearchable) {
-                                    // 층 정보 업데이트
-                                    if (floorInfo) {
-                                        cafe.floor = floorInfo;
-                                    }
-                                    console.log(`네이버 검색 가능 및 카테고리 "카페" 확인 완료 [${cafe.name}]`);
-                                    return cafe;
-                                } else {
-                                    console.log(`네이버 검색 불가능 또는 카테고리가 "카페"가 아님 - 리스팅 제외 [${cafe.name}]`);
-                                    return null;
-                                }
-                            } catch (error) {
-                                console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
-                                console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                                return null;
-                            }
-                        })
-                    );
-                    
-                    // null이 아닌 결과만 추가 (성능 최적화: for...of 사용)
-                    for (const result of batchResults) {
-                        if (result) {
-                            cafesSearchable.push(result);
-                        }
-                    }
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + batchSize < cafesWithAddress.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
-
-                // 각 카페에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
+                // 주소 재조회
+                updateProgress(60, '주소 정보 보완 중...');
+                const cafesWithAddress = await enrichWithAddress(cafes);
                 
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractCafeKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
+                // 5단계: 네이버 검색 필터링
+                updateProgress(70, '네이버 지도에서 검색 확인 중...');
+                const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+                
+                updateProgress(100, '검색 완료!');
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
 
                 // 카페 목록 표시 (공통 함수 사용)
-                renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
+                renderCafeList(cafesSearchable, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
                 loadingEl.style.display = 'none';

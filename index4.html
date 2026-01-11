@@ -210,43 +210,11 @@
             color: #80868b;
         }
 
-        .cafe-keywords {
-            display: flex;
-            gap: 6px;
-            margin-left: 12px;
-            flex-wrap: wrap;
-        }
-
-        .cafe-keyword {
-            font-size: 11px;
-            color: #5f6368;
-            background-color: #f1f3f4;
-            padding: 3px 8px;
-            border-radius: 12px;
-            white-space: nowrap;
-        }
-
         .loading {
             text-align: center;
             padding: 40px;
             color: #5f6368;
             font-size: 14px;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f1f3f4;
-            border-top-color: #4285f4;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 16px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
 
         .loading-container {
@@ -255,6 +223,41 @@
             align-items: center;
             justify-content: center;
             padding: 60px 20px;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .progress-bar-wrapper {
+            width: 100%;
+            height: 8px;
+            background-color: #f1f3f4;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4285f4, #34a853);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #5f6368;
+            margin-bottom: 4px;
+        }
+
+        .progress-percentage {
+            font-size: 14px;
+            font-weight: 500;
+            color: #202124;
         }
 
         .error {
@@ -417,17 +420,6 @@
                 font-size: 12px;
             }
 
-            .cafe-keywords {
-                margin-left: 0;
-                margin-top: 8px;
-                gap: 4px;
-            }
-
-            .cafe-keyword {
-                font-size: 10px;
-                padding: 2px 6px;
-            }
-
             .results-header {
                 font-size: 13px;
                 margin-bottom: 16px;
@@ -452,6 +444,18 @@
 
             .loading-container {
                 padding: 40px 16px;
+            }
+
+            .progress-container {
+                max-width: 100%;
+            }
+
+            .progress-text {
+                font-size: 12px;
+            }
+
+            .progress-percentage {
+                font-size: 13px;
             }
 
             .error {
@@ -578,21 +582,64 @@
 
         <div class="loading" id="loading" style="display: none;">
             <div class="loading-container">
-                <div class="spinner"></div>
-                <div>검색 중...</div>
+                <div class="progress-container">
+                    <div class="progress-text" id="progressText">검색 준비 중...</div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
             </div>
         </div>
         <div class="error" id="error" style="display: none;"></div>
     </div>
 
     <script>
-        // 국밥 관련 메뉴 키워드
-        const SOUP_MENU_KEYWORDS = ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '설렁탕집', '곰탕집', '해장국', '해장국집', '뼈해장국', '콩나물해장국', '시레기해장국', '선지해장국', '따로국밥', '감자탕', '감자탕집', '뼈감자탕', '감자탕국밥', '해장', '육개장', '육게장'];
-
+        // ============================================
+        // 설정 섹션 (하드코딩)
+        // ============================================
+        
+        // 1. 메뉴 연관 카테고리 그룹
+        const MENU_CATEGORY_GROUPS = ['순대국', '설렁탕', '곰탕']; // 카카오 API 검색에 사용할 카테고리 키워드
+        
+        // 2. 제외 필터링 단어 그룹
+        const EXCLUDED_RESTAURANTS = [];
+        const EXCLUDED_CATEGORY_KEYWORDS = []; // 국밥은 네이버 검색으로 필터링하므로 빈 배열
+        
+        // 3. 슈퍼패스 단어 그룹 (필터링 우회용)
+        const SUPERPASS_KEYWORDS = ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '설렁탕집', '곰탕집', '해장국', '해장국집', '뼈해장국', '콩나물해장국', '시레기해장국', '선지해장국', '따로국밥', '감자탕', '감자탕집', '뼈감자탕', '감자탕국밥', '해장', '육개장', '육게장'];
+        
+        // 국밥 관련 메뉴 키워드 (네이버 검색 필터링용)
+        const SOUP_MENU_KEYWORDS = SUPERPASS_KEYWORDS; // 슈퍼패스 키워드와 동일
+        
+        // ============================================
+        // API 설정
+        // ============================================
+        
         // API 엔드포인트 (서버리스 함수 사용)
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3000/api'
             : '/api';
+
+        // ============================================
+        // 프로그레스바 업데이트 함수
+        // ============================================
+        
+        function updateProgress(percentage, text) {
+            const progressBar = document.getElementById('progressBar');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+            }
+            if (progressPercentage) {
+                progressPercentage.textContent = `${percentage}%`;
+            }
+            if (progressText && text) {
+                progressText.textContent = text;
+            }
+        }
 
         // 카카오 API 호출 (서버리스 함수를 통해)
         async function callKakaoAPI(endpoint, params) {
@@ -688,7 +735,18 @@
             return '';
         }
 
-        // 국밥 관련 메뉴를 판매하는 매장인지 확인
+        // ============================================
+        // 필터링 함수
+        // ============================================
+        
+        // 슈퍼패스 키워드가 매장명에 포함되어 있는지 확인
+        function hasSuperpassKeyword(placeName) {
+            if (!placeName || SUPERPASS_KEYWORDS.length === 0) return false;
+            const name = placeName.toLowerCase();
+            return SUPERPASS_KEYWORDS.some(keyword => name.includes(keyword.toLowerCase()));
+        }
+        
+        // 국밥 관련 메뉴를 판매하는 매장인지 확인 (네이버 검색 필터링용)
         function isSoupMenuRestaurant(restaurantName, categoryName) {
             if (!restaurantName && !categoryName) return false;
             
@@ -702,26 +760,30 @@
             );
         }
 
-        // 카카오 API로 국밥 매장 검색
-        async function searchSoupRestaurantsFromKakaoAPI(baseX, baseY, radius = 500) {
+        // ============================================
+        // 카카오 API 검색 함수 (4단계)
+        // ============================================
+        
+        // 카카오 API로 매장 검색 (메뉴 연관 카테고리 그룹 사용)
+        async function searchFromKakaoAPI(baseX, baseY, radius = 500) {
             // 순대국, 설렁탕, 곰탕 병렬 검색
             const [sundaeData, seolleongData, gomtangData] = await Promise.all([
                 callKakaoAPI('keyword', {
-                    query: '순대국',
+                    query: MENU_CATEGORY_GROUPS[0],
                     x: baseX,
                     y: baseY,
                     radius: radius,
                     size: 15
                 }).catch(() => ({ documents: [] })),
                 callKakaoAPI('keyword', {
-                    query: '설렁탕',
+                    query: MENU_CATEGORY_GROUPS[1],
                     x: baseX,
                     y: baseY,
                     radius: radius,
                     size: 15
                 }).catch(() => ({ documents: [] })),
                 callKakaoAPI('keyword', {
-                    query: '곰탕',
+                    query: MENU_CATEGORY_GROUPS[2],
                     x: baseX,
                     y: baseY,
                     radius: radius,
@@ -745,8 +807,12 @@
             });
         }
 
-        // 국밥 매장 결과 처리 및 필터링
-        function processSoupRestaurantResults(documents, baseX, baseY) {
+        // ============================================
+        // 결과 처리 함수
+        // ============================================
+        
+        // 카카오 API 검색 결과 처리 및 필터링 (제외 필터링 단어 그룹 적용)
+        function processSearchResults(documents, baseX, baseY) {
             return documents
                 .map(doc => {
                     const restaurantX = parseFloat(doc.x);
@@ -776,7 +842,7 @@
         }
 
         // 주소 재조회 공통 함수
-        async function enrichRestaurantsWithAddress(restaurants) {
+        async function enrichWithAddress(restaurants) {
             return Promise.all(restaurants.map(async (restaurant) => {
                 if (!restaurant.roadAddress && restaurant.x && restaurant.y) {
                     try {
@@ -801,30 +867,32 @@
             }));
         }
 
-        // 매장명에 국밥 관련 키워드가 포함되어 있는지 확인
-        function hasSoupKeywordInName(restaurantName) {
-            if (!restaurantName) return false;
-            const name = restaurantName.toLowerCase();
-            return SOUP_MENU_KEYWORDS.some(keyword => 
-                name.includes(keyword.toLowerCase())
-            );
-        }
 
-        // 네이버 검색 정보 조회 및 필터링
+        // ============================================
+        // 네이버 검색 필터링 함수 (5단계)
+        // ============================================
+        
+        // 네이버 검색 정보 조회 및 필터링 (슈퍼패스 우회 로직 포함)
         async function processNaverSearchAndFilter(restaurantsWithAddress) {
             const restaurantsSearchable = [];
             const restaurantsExcluded = []; // 제외된 매장들 저장
             const batchSize = 5;
+            const totalBatches = Math.ceil(restaurantsWithAddress.length / batchSize);
             
             for (let i = 0; i < restaurantsWithAddress.length; i += batchSize) {
                 const batch = restaurantsWithAddress.slice(i, i + batchSize);
+                const currentBatch = Math.floor(i / batchSize) + 1;
+                
+                // 프로그레스 업데이트 (70% ~ 95%)
+                const progressPercent = 70 + Math.floor((currentBatch / totalBatches) * 25);
+                updateProgress(progressPercent, `네이버 지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
                 
                 const batchResults = await Promise.all(
                     batch.map(async (restaurant) => {
                         try {
-                            // 매장명에 국밥 관련 키워드가 포함된 경우 필터링 우회
-                            if (hasSoupKeywordInName(restaurant.name)) {
-                                console.log(`매장명에 국밥 관련 키워드 포함 - 리스팅 제외 필터 우회 [${restaurant.name}]`);
+                            // 슈퍼패스 키워드가 있으면 필터링 우회
+                            if (hasSuperpassKeyword(restaurant.name)) {
+                                console.log(`슈퍼패스 키워드 매장 - 리스팅 제외 필터 우회 [${restaurant.name}]`);
                                 
                                 // 층 정보가 없으면 네이버 검색으로 조회 시도
                                 if (!restaurant.floor) {
@@ -1005,171 +1073,13 @@
             return '';
         }
 
-        // 국밥 특징 키워드 추출 (네이버 블로그 리뷰에서 실제 텍스트 분석, 최소 1개 ~ 최대 3개)
-        async function extractSoupRestaurantKeywords(restaurantName, restaurantAddress) {
-            try {
-                // 국밥 매장 이름과 주소를 조합하여 검색어 생성
-                const searchQuery = restaurantAddress 
-                    ? `${restaurantName} ${restaurantAddress.split(' ').slice(0, 3).join(' ')}`
-                    : restaurantName;
-                
-                // 네이버 블로그 검색 API 호출
-                const blogData = await callNaverAPI('blog', {
-                    query: searchQuery,
-                    display: 30,
-                    sort: 'sim'
-                });
-
-                if (!blogData.items || blogData.items.length === 0) {
-                    // 블로그 검색 실패 시 국밥 매장 이름에서 키워드 추출 시도
-                    console.warn('블로그 검색 결과 없음, 국밥 매장 이름에서 키워드 추출 시도:', restaurantName);
-                    return extractKeywordsFromSoupName(restaurantName);
-                }
-
-                // 모든 블로그 포스트의 제목과 설명을 합쳐서 텍스트 분석
-                const allText = blogData.items
-                    .map(item => {
-                        const title = (item.title || '').replace(/<[^>]*>/g, ' ');
-                        const description = (item.description || '').replace(/<[^>]*>/g, ' ');
-                        return `${title} ${description}`;
-                    })
-                    .join(' ');
-
-                // 국밥 관련 메뉴 키워드 패턴
-                const menuPatterns = [
-                    // 국밥 종류
-                    { pattern: /순대국|순댓국/gi, keyword: '순대국' },
-                    { pattern: /설렁탕/gi, keyword: '설렁탕' },
-                    { pattern: /곰탕/gi, keyword: '곰탕' },
-                    { pattern: /해장국/gi, keyword: '해장국' },
-                    { pattern: /뼈해장국/gi, keyword: '뼈해장국' },
-                    { pattern: /콩나물해장국/gi, keyword: '콩나물해장국' },
-                    { pattern: /시레기해장국/gi, keyword: '시레기해장국' },
-                    { pattern: /선지해장국/gi, keyword: '선지해장국' },
-                    { pattern: /따로국밥/gi, keyword: '따로국밥' },
-                    { pattern: /감자탕/gi, keyword: '감자탕' },
-                    { pattern: /뼈감자탕/gi, keyword: '뼈감자탕' },
-                    { pattern: /육개장|육게장/gi, keyword: '육개장' },
-                    
-                    // 국밥 특징
-                    { pattern: /깔끔한|깔끔|담백|시원/gi, keyword: '깔끔한' },
-                    { pattern: /진한|깊은|깊고/gi, keyword: '진한 국물' },
-                    { pattern: /얼큰|칼칼|매운/gi, keyword: '얼큰한' },
-                    { pattern: /고소|고소한/gi, keyword: '고소한' },
-                    
-                    // 특별 메뉴/재료
-                    { pattern: /우거지|시래기/gi, keyword: '우거지' },
-                    { pattern: /선지/gi, keyword: '선지' },
-                    { pattern: /수육/gi, keyword: '수육' },
-                    { pattern: /곱창|막창/gi, keyword: '곱창' },
-                    
-                    // 분위기/특징
-                    { pattern: /24시간|24시/gi, keyword: '24시간' },
-                    { pattern: /야식/gi, keyword: '야식' },
-                    { pattern: /해장|해장하러/gi, keyword: '해장' },
-                    { pattern: /무한리필/gi, keyword: '무한리필' }
-                ];
-
-                // 각 메뉴 키워드의 출현 빈도 계산
-                const keywordScores = {};
-                for (const { pattern, keyword } of menuPatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        keywordScores[keyword] = (keywordScores[keyword] || 0) + matches.length;
-                    }
-                }
-
-                // 디버깅: 키워드 추출 결과 확인
-                console.log('국밥 키워드 추출 결과:', {
-                    restaurantName,
-                    searchQuery,
-                    blogItemsCount: blogData.items?.length || 0,
-                    allTextLength: allText.length,
-                    allTextSample: allText.substring(0, 200),
-                    keywordScores,
-                    sortedKeywords: Object.entries(keywordScores).sort((a, b) => b[1] - a[1]).slice(0, 3)
-                });
-
-                // 빈도 순으로 정렬하고 상위 3개 선택 (최대 3개)
-                const sortedKeywords = Object.entries(keywordScores)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 3)
-                    .map(([keyword]) => keyword);
-
-                // 최소 1개 이상이면 반환, 없으면 빈 배열
-                return sortedKeywords.length > 0 ? sortedKeywords : [];
-            } catch (error) {
-                console.error('국밥 키워드 추출 실패:', error);
-                // 에러 발생 시 국밥 매장 이름에서 키워드 추출 시도
-                return extractKeywordsFromSoupName(restaurantName);
-            }
-        }
-
-        // 국밥 매장 이름에서 키워드 추출 (폴백)
-        function extractKeywordsFromSoupName(restaurantName) {
-            const keywords = [];
-            const name = (restaurantName || '').toLowerCase();
-            
-            const namePatterns = [
-                { pattern: /순대국|순댓국/gi, keyword: '순대국' },
-                { pattern: /설렁탕/gi, keyword: '설렁탕' },
-                { pattern: /곰탕/gi, keyword: '곰탕' },
-                { pattern: /해장국/gi, keyword: '해장국' },
-                { pattern: /감자탕/gi, keyword: '감자탕' },
-                { pattern: /육개장|육게장/gi, keyword: '육개장' },
-                { pattern: /24시간|24시/gi, keyword: '24시간' },
-                { pattern: /무한리필/gi, keyword: '무한리필' }
-            ];
-            
-            for (const { pattern, keyword } of namePatterns) {
-                if (pattern.test(name) && keywords.length < 3 && !keywords.includes(keyword)) {
-                    keywords.push(keyword);
-                }
-            }
-            
-            return keywords;
-        }
-
-        // 키워드 추출 공통 함수
-        async function processKeywords(restaurantsSearchable) {
-            const restaurantsWithKeywords = [];
-            const keywordBatchSize = 5;
-            
-            for (let i = 0; i < restaurantsSearchable.length; i += keywordBatchSize) {
-                const batch = restaurantsSearchable.slice(i, i + keywordBatchSize);
-                
-                const batchResults = await Promise.all(
-                    batch.map(async (restaurant) => {
-                        try {
-                            const keywords = await extractSoupRestaurantKeywords(
-                                restaurant.name,
-                                restaurant.displayAddress || restaurant.roadAddress || restaurant.address
-                            );
-                            console.log(`국밥 키워드 추출 완료 [${restaurant.name}]:`, keywords);
-                            return { ...restaurant, keywords: keywords || [] };
-                        } catch (error) {
-                            console.error('국밥 키워드 추출 실패:', restaurant.name, error);
-                            return { ...restaurant, keywords: [] };
-                        }
-                    })
-                );
-                
-                restaurantsWithKeywords.push(...batchResults);
-                
-                if (i + keywordBatchSize < restaurantsSearchable.length) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                }
-            }
-            
-            return restaurantsWithKeywords;
-        }
 
         // 네이버 검색 결과 가져오기 (국밥 메뉴 확인)
         async function getNaverSearchInfo(restaurant) {
             try {
-                // 매장명에 국밥 관련 키워드가 포함된 경우 필터링 우회
-                if (hasSoupKeywordInName(restaurant.name)) {
-                    console.log('매장명에 국밥 관련 키워드 포함 - 네이버 검색 필터링 우회:', restaurant.name);
+                // 슈퍼패스 키워드가 있으면 필터링 우회
+                if (hasSuperpassKeyword(restaurant.name)) {
+                    console.log('슈퍼패스 키워드 매장 - 네이버 검색 필터링 우회:', restaurant.name);
                     const floorInfo = await fetchFloorInfoFromNaver(restaurant);
                     return { isSearchable: true, floorInfo };
                 }
@@ -1284,27 +1194,7 @@
                 distanceEl.className = 'cafe-distance';
                 distanceEl.textContent = `${Math.round(restaurant.distance)}m`;
                 
-                // 키워드 표시
-                const keywords = restaurant.keywords || [];
-                const keywordsContainer = document.createElement('div');
-                keywordsContainer.className = 'cafe-keywords';
-                
-                for (const keyword of keywords) {
-                    const keywordEl = document.createElement('span');
-                    keywordEl.className = 'cafe-keyword';
-                    keywordEl.textContent = keyword;
-                    keywordsContainer.appendChild(keywordEl);
-                }
-                
-                const distanceContainer = document.createElement('div');
-                distanceContainer.style.display = 'flex';
-                distanceContainer.style.alignItems = 'center';
-                distanceContainer.appendChild(distanceEl);
-                if (keywords.length > 0) {
-                    distanceContainer.appendChild(keywordsContainer);
-                }
-                
-                li.appendChild(distanceContainer);
+                li.appendChild(distanceEl);
                 
                 li.onclick = () => openNaverMap(restaurant);
                 
@@ -1510,28 +1400,31 @@
 
         // 국밥 매장 검색 공통 함수 (중복 제거)
         async function searchAndProcessRestaurants(baseX, baseY, radius = 500) {
-            const allResults = await searchSoupRestaurantsFromKakaoAPI(baseX, baseY, radius);
+            // 4단계: 카카오 API로 매장 검색
+            const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
             
-            console.log('카카오 API 검색 결과:', {
-                query: '순대국 + 설렁탕 + 곰탕',
-                count: allResults.length,
-                results: allResults.slice(0, 5).map(doc => doc.place_name)
-            });
-
             if (allResults.length === 0) {
                 return [];
             }
-
-            const restaurants = processSoupRestaurantResults(allResults, baseX, baseY);
+            
+            // 결과 처리 및 필터링
+            updateProgress(50, '검색 결과 필터링 중...');
+            const restaurants = processSearchResults(allResults, baseX, baseY);
 
             if (restaurants.length === 0) {
                 return [];
             }
-
-            const restaurantsWithAddress = await enrichRestaurantsWithAddress(restaurants);
+            
+            // 주소 재조회
+            updateProgress(60, '주소 정보 보완 중...');
+            const restaurantsWithAddress = await enrichWithAddress(restaurants);
+            
+            // 5단계: 네이버 검색 필터링
+            updateProgress(70, '네이버 지도에서 검색 확인 중...');
             const { restaurantsSearchable, restaurantsExcluded } = await processNaverSearchAndFilter(restaurantsWithAddress);
             
             // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가
+            updateProgress(85, '추가 매장 검색 중...');
             const supplementedRestaurants = await supplementWithKoreanRestaurants(restaurantsExcluded, baseX, baseY, radius);
             
             // 최종 리스팅: 기존 검색 가능한 매장 + 보완된 한식 매장
@@ -1539,10 +1432,7 @@
             // 거리순으로 재정렬
             finalRestaurants.sort((a, b) => a.distance - b.distance);
 
-            // 키워드 추출
-            const restaurantsWithKeywords = await processKeywords(finalRestaurants);
-
-            return restaurantsWithKeywords;
+            return finalRestaurants;
         }
 
         // 좌표로 국밥 매장 검색
@@ -1558,13 +1448,17 @@
             resultsSection.style.display = 'none';
             resultsHeader.textContent = '';
             restaurantList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
                 const radius = 500;
                 
+                updateProgress(30, '카카오 지도에서 국밥 매장 검색 중...');
                 const finalRestaurants = await searchAndProcessRestaurants(baseX, baseY, radius);
+                
+                updateProgress(100, '검색 완료!');
 
                 if (finalRestaurants.length === 0) {
                     loadingEl.style.display = 'none';
@@ -1600,8 +1494,11 @@
             resultsSection.style.display = 'none';
             resultsHeader.textContent = '';
             restaurantList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
+                // 1단계: 카카오 API로 주소를 좌표로 변환
+                updateProgress(10, '주소 검색 중...');
                 const addressData = await callKakaoAPI('address', {
                     query: address,
                     size: 1
@@ -1616,7 +1513,10 @@
                 const baseY = parseFloat(location.y);
                 const radius = 500;
                 
+                updateProgress(30, '카카오 지도에서 국밥 매장 검색 중...');
                 const finalRestaurants = await searchAndProcessRestaurants(baseX, baseY, radius);
+                
+                updateProgress(100, '검색 완료!');
 
                 if (finalRestaurants.length === 0) {
                     loadingEl.style.display = 'none';

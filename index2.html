@@ -211,23 +211,6 @@
         }
 
 
-        .cafe-keywords {
-            display: flex;
-            gap: 6px;
-            margin-left: 12px;
-            flex-wrap: wrap;
-        }
-
-        .cafe-keyword {
-            font-size: 11px;
-            color: #5f6368;
-            background-color: #f1f3f4;
-            padding: 3px 8px;
-            border-radius: 12px;
-            white-space: nowrap;
-        }
-
-
 
         .loading {
             text-align: center;
@@ -236,28 +219,47 @@
             font-size: 14px;
         }
 
-        .spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f1f3f4;
-            border-top-color: #4285f4;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 16px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .loading-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 60px 20px;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .progress-bar-wrapper {
+            width: 100%;
+            height: 8px;
+            background-color: #f1f3f4;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4285f4, #34a853);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #5f6368;
+            margin-bottom: 4px;
+        }
+
+        .progress-percentage {
+            font-size: 14px;
+            font-weight: 500;
+            color: #202124;
         }
 
         .error {
@@ -423,18 +425,6 @@
             }
 
 
-            .cafe-keywords {
-                margin-left: 0;
-                margin-top: 8px;
-                gap: 4px;
-            }
-
-            .cafe-keyword {
-                font-size: 10px;
-                padding: 2px 6px;
-            }
-
-
 
             .results-header {
                 font-size: 13px;
@@ -460,6 +450,18 @@
 
             .loading-container {
                 padding: 40px 16px;
+            }
+
+            .progress-container {
+                max-width: 100%;
+            }
+
+            .progress-text {
+                font-size: 12px;
+            }
+
+            .progress-percentage {
+                font-size: 13px;
             }
 
             .error {
@@ -586,24 +588,61 @@
 
         <div class="loading" id="loading" style="display: none;">
             <div class="loading-container">
-                <div class="spinner"></div>
-                <div>검색 중...</div>
+                <div class="progress-container">
+                    <div class="progress-text" id="progressText">검색 준비 중...</div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
             </div>
         </div>
         <div class="error" id="error" style="display: none;"></div>
     </div>
 
     <script>
-        // 제외할 프랜차이즈 마라탕 목록 (필요시 추가)
+        // ============================================
+        // 설정 섹션 (하드코딩)
+        // ============================================
+        
+        // 1. 메뉴 연관 카테고리 그룹
+        const MENU_CATEGORY_GROUPS = ['마라탕']; // 카카오 API 검색에 사용할 카테고리 키워드
+        
+        // 2. 제외 필터링 단어 그룹
         const EXCLUDED_MARATANGS = [];
-
-        // 마라탕 관련 키워드
-        const MARATANG_KEYWORDS = ['마라', '마라탕', '마라샹궈', '샹궈', '마라면', '훠궈', '샤브샤브', 'malatang', '마라탕집', '마라샹궈집', '훠궈집'];
-
+        const EXCLUDED_CATEGORY_KEYWORDS = ['카페', 'cafe', '커피', 'coffee', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '일식', '양식', '일본', 'japanese', 'western'];
+        
+        // 3. 슈퍼패스 단어 그룹 (필터링 우회용)
+        const SUPERPASS_KEYWORDS = ['마라', '마라탕', '마라샹궈', '샹궈', '마라면', '훠궈', '샤브샤브', 'malatang', '마라탕집', '마라샹궈집', '훠궈집'];
+        
+        // ============================================
+        // API 설정
+        // ============================================
+        
         // API 엔드포인트 (서버리스 함수 사용)
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3000/api'
             : '/api';
+
+        // ============================================
+        // 프로그레스바 업데이트 함수
+        // ============================================
+        
+        function updateProgress(percentage, text) {
+            const progressBar = document.getElementById('progressBar');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+            }
+            if (progressPercentage) {
+                progressPercentage.textContent = `${percentage}%`;
+            }
+            if (progressText && text) {
+                progressText.textContent = text;
+            }
+        }
 
         // 네이버 좌표계를 WGS84로 변환
         function naverToWGS84(mapx, mapy) {
@@ -690,23 +729,18 @@
             return R * c; // 미터 단위 거리
         }
 
-        // 프랜차이즈 마라탕인지 확인
+        // ============================================
+        // 필터링 함수
+        // ============================================
+        
+        // 제외할 프랜차이즈 마라탕인지 확인
         function isExcludedMaratang(maratangName) {
             if (!maratangName) return false;
             const name = maratangName.toLowerCase();
             return EXCLUDED_MARATANGS.some(excluded => name.includes(excluded.toLowerCase()));
         }
-
-        // 매장명에 마라탕 관련 키워드가 포함되어 있는지 확인
-        function hasMaratangKeywordInName(maratangName) {
-            if (!maratangName) return false;
-            const name = maratangName.toLowerCase();
-            return MARATANG_KEYWORDS.some(keyword => 
-                name.includes(keyword.toLowerCase())
-            );
-        }
-
-        // 마라탕 카테고리인지 확인 (중식당, 한식, 일식, 양식 등 제외)
+        
+        // 마라탕 카테고리인지 확인 (제외 필터링 단어 그룹 사용)
         function isMaratangCategory(categoryName) {
             // 카테고리 정보가 없으면 허용 (기본적으로 마라탕 검색 결과이므로)
             if (!categoryName) return true;
@@ -717,12 +751,18 @@
             const maratangKeywords = ['중식', 'chinese', '마라탕', 'malatang', '중국요리', '중화요리'];
             const hasMaratangKeyword = maratangKeywords.some(keyword => category.includes(keyword));
             
-            // 제외할 카테고리 체크
-            const excludedKeywords = ['카페', 'cafe', '커피', 'coffee', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '일식', '양식', '일본', 'japanese', 'western'];
-            const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
+            // 제외할 카테고리 체크 (제외 필터링 단어 그룹 사용)
+            const isExcluded = EXCLUDED_CATEGORY_KEYWORDS.some(keyword => category.includes(keyword));
             
             // 마라탕 키워드가 있거나 제외 키워드가 없으면 허용
             return hasMaratangKeyword || !isExcluded;
+        }
+        
+        // 슈퍼패스 키워드가 매장명에 포함되어 있는지 확인
+        function hasSuperpassKeyword(placeName) {
+            if (!placeName || SUPERPASS_KEYWORDS.length === 0) return false;
+            const name = placeName.toLowerCase();
+            return SUPERPASS_KEYWORDS.some(keyword => name.includes(keyword.toLowerCase()));
         }
 
         // 층 정보 패턴들 (미리 컴파일하여 성능 최적화)
@@ -799,30 +839,9 @@
                 distanceEl.className = 'cafe-distance';
                 distanceEl.textContent = `${Math.round(cafe.distance)}m`;
                 
-                // 키워드 표시
-                const keywords = cafe.keywords || [];
-                const keywordsContainer = document.createElement('div');
-                keywordsContainer.className = 'cafe-keywords';
-                
-                // 성능 최적화: for...of 사용
-                for (const keyword of keywords) {
-                    const keywordEl = document.createElement('span');
-                    keywordEl.className = 'cafe-keyword';
-                    keywordEl.textContent = keyword;
-                    keywordsContainer.appendChild(keywordEl);
-                }
-                
-                const distanceContainer = document.createElement('div');
-                distanceContainer.style.display = 'flex';
-                distanceContainer.style.alignItems = 'center';
-                distanceContainer.appendChild(distanceEl);
-                if (keywords.length > 0) {
-                    distanceContainer.appendChild(keywordsContainer);
-                }
-                
                 li.appendChild(nameEl);
                 li.appendChild(addressEl);
-                li.appendChild(distanceContainer);
+                li.appendChild(distanceEl);
                 
                 fragment.appendChild(li);
             }
@@ -831,145 +850,15 @@
             cafeList.appendChild(fragment);
         }
 
-        // 마라탕 특징 키워드 추출 (네이버 블로그 리뷰에서 실제 텍스트 분석, 최소 1개 ~ 최대 3개)
-        async function extractCafeKeywords(maratangName, maratangAddress) {
-            try {
-                // 마라탕 이름과 주소를 조합하여 검색어 생성
-                const searchQuery = maratangAddress 
-                    ? `${maratangName} ${maratangAddress.split(' ').slice(0, 3).join(' ')}`
-                    : maratangName;
-                
-                // 네이버 블로그 검색 API 호출
-                const blogData = await callNaverAPI('blog', {
-                    query: searchQuery,
-                    display: 30, // 더 많은 블로그 포스트 검색
-                    sort: 'sim'  // 관련도순 정렬
-                });
 
-                if (!blogData.items || blogData.items.length === 0) {
-                    // 블로그 검색 실패 시 마라탕 이름에서 키워드 추출 시도
-                    console.warn('블로그 검색 결과 없음, 마라탕 이름에서 키워드 추출 시도:', maratangName);
-                    return extractKeywordsFromName(maratangName);
-                }
-
-                // 모든 블로그 포스트의 제목과 설명을 합쳐서 텍스트 분석
-                const allText = blogData.items
-                    .map(item => {
-                        // HTML 태그 제거
-                        const title = (item.title || '').replace(/<[^>]*>/g, ' ');
-                        const description = (item.description || '').replace(/<[^>]*>/g, ' ');
-                        return `${title} ${description}`;
-                    })
-                    .join(' ');
-
-                // 마라탕 관련 단어 확인 (키워드에 '마라탕' 포함 여부 결정)
-                const maratangPattern = /마라탕|마라탕탕|마라탕면|malatang/gi;
-                const hasMaratangKeyword = maratangPattern.test(allText);
-
-                // 마라탕 메뉴 관련 키워드 패턴
-                const menuPatterns = [
-                    // 마라탕 관련
-                    { pattern: /마라탕|마라탕탕|마라탕면/gi, keyword: '마라탕' },
-                    { pattern: /마라샹궈|샹궈/gi, keyword: '마라샹궈' },
-                    { pattern: /마라면/gi, keyword: '마라면' },
-                    { pattern: /훠궈|샤브샤브/gi, keyword: '훠궈' },
-                    
-                    // 재료 관련
-                    { pattern: /우육|소고기/gi, keyword: '우육' },
-                    { pattern: /양육|양고기/gi, keyword: '양육' },
-                    { pattern: /돼지고기/gi, keyword: '돼지고기' },
-                    { pattern: /닭고기|치킨/gi, keyword: '닭고기' },
-                    { pattern: /해산물|새우|오징어/gi, keyword: '해산물' },
-                    { pattern: /두부|유부/gi, keyword: '두부' },
-                    { pattern: /버섯|팽이버섯|목이버섯/gi, keyword: '버섯' },
-                    { pattern: /배추|양배추/gi, keyword: '배추' },
-                    { pattern: /콩나물/gi, keyword: '콩나물' },
-                    { pattern: /당면/gi, keyword: '당면' },
-                    { pattern: /라면사리/gi, keyword: '라면사리' },
-                    
-                    // 맛 관련
-                    { pattern: /매운맛|얼큰|칼칼/gi, keyword: '매운맛' },
-                    { pattern: /마라맛|마라향/gi, keyword: '마라향' },
-                    { pattern: /고수|향신료/gi, keyword: '고수' },
-                    { pattern: /마늘|파/gi, keyword: '마늘파' },
-                    
-                    // 특수 유형
-                    { pattern: /셀프|무한리필/gi, keyword: '셀프' },
-                    { pattern: /양식|일식|한식/gi, keyword: '퓨전' }
-                ];
-
-                // 각 메뉴 키워드의 출현 빈도 계산 (성능 최적화: for...of 사용)
-                const keywordScores = {};
-                for (const { pattern, keyword } of menuPatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        // 이미 존재하면 빈도 추가, 없으면 새로 추가
-                        keywordScores[keyword] = (keywordScores[keyword] || 0) + matches.length;
-                    }
-                }
-
-                // 디버깅: 키워드 추출 결과 확인
-                console.log('키워드 추출 결과:', {
-                    maratangName,
-                    searchQuery,
-                    blogItemsCount: blogData.items?.length || 0,
-                    allTextLength: allText.length,
-                    allTextSample: allText.substring(0, 200), // 처음 200자만 샘플
-                    hasMaratangKeyword,
-                    keywordScores,
-                    sortedKeywords: Object.entries(keywordScores).sort((a, b) => b[1] - a[1]).slice(0, 3)
-                });
-
-                // 빈도 순으로 정렬하고 상위 3개 선택 (최대 3개)
-                let sortedKeywords = Object.entries(keywordScores)
-                    .sort((a, b) => b[1] - a[1]) // 빈도 내림차순
-                    .slice(0, 3) // 최대 3개
-                    .map(([keyword]) => keyword);
-
-                // 마라탕 관련 단어가 확인되면 키워드에 '마라탕'을 꼭 포함
-                if (hasMaratangKeyword && !sortedKeywords.includes('마라탕')) {
-                    // '마라탕'을 첫 번째 위치에 추가하고, 최대 3개 유지
-                    sortedKeywords = ['마라탕', ...sortedKeywords.filter(k => k !== '마라탕')].slice(0, 3);
-                }
-
-                // 최소 1개 이상이면 반환, 없으면 빈 배열 (강제 보충 금지)
-                return sortedKeywords.length > 0 ? sortedKeywords : [];
-            } catch (error) {
-                console.error('키워드 추출 실패:', error);
-                // 에러 발생 시 마라탕 이름에서 키워드 추출 시도
-                return extractKeywordsFromName(maratangName);
-            }
-        }
-
-
-        // 마라탕 이름에서 키워드 추출 (폴백)
-        function extractKeywordsFromName(maratangName) {
-            const keywords = [];
-            const name = (maratangName || '').toLowerCase();
-            
-            const namePatterns = [
-                { pattern: /마라탕|malatang/gi, keyword: '마라탕' },
-                { pattern: /마라샹궈|샹궈/gi, keyword: '마라샹궈' },
-                { pattern: /훠궈|샤브샤브/gi, keyword: '훠궈' },
-                { pattern: /셀프/gi, keyword: '셀프' },
-                { pattern: /무한리필/gi, keyword: '무한리필' },
-                { pattern: /중식|chinese/gi, keyword: '중식' }
-            ];
-            
-            // 성능 최적화: for...of 사용
-            for (const { pattern, keyword } of namePatterns) {
-                if (pattern.test(name) && keywords.length < 3 && !keywords.includes(keyword)) {
-                    keywords.push(keyword);
-                }
-            }
-            
-            return keywords;
-        }
-
-        // 카카오 API로 마라탕 매장 검색
-        async function searchMaratangsFromKakaoAPI(baseX, baseY, radius = 500) {
+        // ============================================
+        // 카카오 API 검색 함수 (4단계)
+        // ============================================
+        
+        // 카카오 API로 매장 검색 (메뉴 연관 카테고리 그룹 사용)
+        async function searchFromKakaoAPI(baseX, baseY, radius = 500) {
             const categorySelect = document.getElementById('categorySelect');
-            const selectedCategory = categorySelect.value;
+            const selectedCategory = categorySelect.value || MENU_CATEGORY_GROUPS[0];
             
             const cafeData = await callKakaoAPI('keyword', {
                 query: selectedCategory,
@@ -982,8 +871,12 @@
             return cafeData.documents || [];
         }
 
-        // 마라탕 매장 결과 처리 및 필터링
-        function processMaratangResults(documents, baseX, baseY) {
+        // ============================================
+        // 결과 처리 함수
+        // ============================================
+        
+        // 카카오 API 검색 결과 처리 및 필터링 (제외 필터링 단어 그룹 적용)
+        function processSearchResults(documents, baseX, baseY) {
             return documents
                 .filter(doc => {
                     const categoryName = doc.category_name || '';
@@ -1023,7 +916,7 @@
         }
 
         // 주소 재조회 공통 함수
-        async function enrichCafesWithAddress(cafes) {
+        async function enrichWithAddress(cafes) {
             return Promise.all(cafes.map(async (cafe) => {
                 if (!cafe.roadAddress && cafe.x && cafe.y) {
                     try {
@@ -1050,13 +943,23 @@
             }));
         }
 
-        // 네이버 검색 및 필터링 공통 함수
+        // ============================================
+        // 네이버 검색 필터링 함수 (5단계)
+        // ============================================
+        
+        // 네이버 검색 및 필터링 공통 함수 (슈퍼패스 우회 로직 포함)
         async function processNaverSearchAndFilter(cafesWithAddress) {
             const cafesSearchable = [];
             const batchSize = 5;
+            const totalBatches = Math.ceil(cafesWithAddress.length / batchSize);
             
             for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
                 const batch = cafesWithAddress.slice(i, i + batchSize);
+                const currentBatch = Math.floor(i / batchSize) + 1;
+                
+                // 프로그레스 업데이트 (70% ~ 95%)
+                const progressPercent = 70 + Math.floor((currentBatch / totalBatches) * 25);
+                updateProgress(progressPercent, `네이버 지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
                 
                 const batchResults = await Promise.all(
                     batch.map(async (cafe) => {
@@ -1095,59 +998,33 @@
             return cafesSearchable;
         }
 
-        // 키워드 추출 공통 함수
-        async function processKeywords(cafesSearchable) {
-            const cafesWithKeywords = [];
-            const keywordBatchSize = 5;
-            
-            for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                
-                const batchResults = await Promise.all(
-                    batch.map(async (cafe) => {
-                        try {
-                            const keywords = await extractCafeKeywords(
-                                cafe.name,
-                                cafe.displayAddress || cafe.roadAddress || cafe.address
-                            );
-                            console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                            return { ...cafe, keywords: keywords || [] };
-                        } catch (error) {
-                            console.error('키워드 추출 실패:', cafe.name, error);
-                            return { ...cafe, keywords: [] };
-                        }
-                    })
-                );
-                
-                cafesWithKeywords.push(...batchResults);
-                
-                if (i + keywordBatchSize < cafesSearchable.length) {
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                }
-            }
-            
-            return cafesWithKeywords;
-        }
 
         // 마라탕 검색 및 처리 공통 함수 (중복 제거)
         async function searchAndProcessMaratangs(baseX, baseY, radius = 500) {
-            const allResults = await searchMaratangsFromKakaoAPI(baseX, baseY, radius);
+            // 4단계: 카카오 API로 매장 검색
+            const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
             
             if (allResults.length === 0) {
                 return [];
             }
             
-            const cafes = processMaratangResults(allResults, baseX, baseY);
+            // 결과 처리 및 필터링
+            updateProgress(50, '검색 결과 필터링 중...');
+            const cafes = processSearchResults(allResults, baseX, baseY);
             
             if (cafes.length === 0) {
                 return [];
             }
             
-            const cafesWithAddress = await enrichCafesWithAddress(cafes);
-            const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
-            const cafesWithKeywords = await processKeywords(cafesSearchable);
+            // 주소 재조회
+            updateProgress(60, '주소 정보 보완 중...');
+            const cafesWithAddress = await enrichWithAddress(cafes);
             
-            return cafesWithKeywords;
+            // 5단계: 네이버 검색 필터링
+            updateProgress(70, '네이버 지도에서 검색 확인 중...');
+            const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+            
+            return cafesSearchable;
         }
 
         // 마라탕 검색
@@ -1163,9 +1040,11 @@
             errorEl.style.display = 'none';
             resultsSection.style.display = 'none';
             cafeList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
-                // 1단계: 카카오 API로 주소를 좌표로 변환 (정확한 주소 검색)
+                // 1단계: 카카오 API로 주소를 좌표로 변환
+                updateProgress(10, '주소 검색 중...');
                 const addressData = await callKakaoAPI('address', {
                     query: address,
                     size: 1
@@ -1180,16 +1059,19 @@
                 const baseY = parseFloat(location.y);
                 const radius = 500;
                 
-                const cafesWithKeywords = await searchAndProcessMaratangs(baseX, baseY, radius);
+                updateProgress(30, '카카오 지도에서 마라탕 매장 검색 중...');
+                const cafes = await searchAndProcessMaratangs(baseX, baseY, radius);
+                
+                updateProgress(100, '검색 완료!');
 
-                if (cafesWithKeywords.length === 0) {
+                if (cafes.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
 
                 loadingEl.style.display = 'none';
-                renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
+                renderCafeList(cafes, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
                 loadingEl.style.display = 'none';
@@ -1213,12 +1095,12 @@
             }
         }
 
-        // 네이버 검색 결과 가져오기 (층 정보, 검색 가능 여부, 카테고리 확인 통합)
+        // 네이버 검색 결과 가져오기 (슈퍼패스 우회 로직 포함)
         async function getNaverSearchInfo(cafe) {
             try {
-                // 매장명에 마라탕 관련 키워드가 포함된 경우 필터링 우회
-                if (hasMaratangKeywordInName(cafe.name)) {
-                    console.log('매장명에 마라탕 관련 키워드 포함 - 네이버 검색 필터링 우회:', cafe.name);
+                // 슈퍼패스 키워드가 있으면 필터링 우회
+                if (hasSuperpassKeyword(cafe.name)) {
+                    console.log('슈퍼패스 키워드 매장 - 네이버 검색 필터링 우회:', cafe.name);
                     let floorInfo = cafe.floor || '';
                     
                     // 층 정보가 없으면 네이버 검색으로 조회 시도
@@ -1585,24 +1467,28 @@
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             resultsSection.style.display = 'none';
-            resultsHeader.textContent = ''; // 주소 후보 문구 제거
+            resultsHeader.textContent = '';
             cafeList.innerHTML = '';
+            updateProgress(0, '검색 준비 중...');
 
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
                 const radius = 500;
                 
-                const cafesWithKeywords = await searchAndProcessMaratangs(baseX, baseY, radius);
+                updateProgress(30, '카카오 지도에서 마라탕 매장 검색 중...');
+                const cafes = await searchAndProcessMaratangs(baseX, baseY, radius);
+                
+                updateProgress(100, '검색 완료!');
 
-                if (cafesWithKeywords.length === 0) {
+                if (cafes.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
 
                 loadingEl.style.display = 'none';
-                renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
+                renderCafeList(cafes, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
                 loadingEl.style.display = 'none';
