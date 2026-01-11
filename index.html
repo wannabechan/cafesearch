@@ -573,9 +573,10 @@
                     <button id="locationButton" class="location-button" title="현위치">📍</button>
                     <select id="categorySelect" class="category-select" title="카테고리 선택">
                         <option value="카페" selected>카페</option>
-                        <option value="마라탕">마라탕</option>
                         <option value="빵">빵</option>
+                        <option value="마라탕">마라탕</option>
                         <option value="국밥">국밥</option>
+                        <option value="김밥">김밥</option>
                     </select>
                 </div>
             </div>
@@ -602,18 +603,84 @@
 
     <script>
         // ============================================
-        // 설정 섹션 (하드코딩)
+        // 설정 섹션 (메뉴별 설정 객체)
         // ============================================
         
-        // 1. 메뉴 연관 카테고리 그룹
-        const MENU_CATEGORY_GROUPS = ['카페', '커피', '원두', 'cafe', 'coffee', '원두커피']; // 카카오 API 검색에 사용할 카테고리 키워드
+        // 메뉴별 설정 객체
+        const MENU_CONFIGS = {
+            '카페': {
+                categoryGroups: ['카페', '커피', '원두', 'cafe', 'coffee', '원두커피'],
+                excludedNames: ['스타벅스', '이디야', '컴포즈', '메가', 'MGC', '카페베네', '투썸', '매머드', '커피앳웍스', '백억커피', '할리스', '커피빈', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스', '백미당', '파스쿠찌', '텐퍼센트커피', '폴바셋'],
+                excludedCategoryKeywords: ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'],
+                superpassKeywords: [],
+                searchMessage: '카카오 지도에서 카페 검색 중...',
+                hasSupplementLogic: false
+            },
+            '마라탕': {
+                categoryGroups: ['마라탕', '마라샹궈', '마라'],
+                excludedNames: [],
+                excludedCategoryKeywords: [],
+                superpassKeywords: ['마라', '마라탕', '마라샹궈', '샹궈', '마라면', '훠궈', '샤브샤브', 'malatang', '마라탕집', '마라샹궈집', '훠궈집'],
+                searchMessage: '카카오 지도에서 마라탕 매장 검색 중...',
+                hasSupplementLogic: false
+            },
+            '빵': {
+                categoryGroups: ['빵집', '베이커리', '제과', '제빵', '빵', 'bakery', '제과점', '제빵소'],
+                excludedNames: [],
+                excludedCategoryKeywords: [],
+                superpassKeywords: ['뚜레쥬르', '아티제', '던킨', '도너츠', '파리바게트', '파리크라상', '제과', '제빵', '베이커리'],
+                searchMessage: '카카오 지도에서 빵집 검색 중...',
+                hasSupplementLogic: false
+            },
+            '국밥': {
+                categoryGroups: ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '설렁탕집', '곰탕집', '해장국', '해장국집', '뼈해장국', '콩나물해장국', '시레기해장국', '선지해장국', '따로국밥', '감자탕', '감자탕집', '뼈감자탕', '감자탕국밥', '해장', '육개장', '육게장', '사골국밥'],
+                excludedNames: [],
+                excludedCategoryKeywords: [],
+                superpassKeywords: ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '설렁탕집', '곰탕집', '해장국', '해장국집', '뼈해장국', '콩나물해장국', '시레기해장국', '선지해장국', '따로국밥', '감자탕', '감자탕집', '뼈감자탕', '감자탕국밥', '해장', '육개장', '육게장'],
+                searchMessage: '카카오 지도에서 국밥 매장 검색 중...',
+                hasSupplementLogic: true
+            },
+            '김밥': {
+                categoryGroups: ['김밥', '김밥집', 'kimbap', '분식', '분식집'],
+                excludedNames: [],
+                excludedCategoryKeywords: [],
+                superpassKeywords: ['김밥', '김밥집', '분식', 'kimbap'],
+                searchMessage: '카카오 지도에서 김밥 집 검색 중...',
+                hasSupplementLogic: false
+            }
+        };
         
-        // 2. 제외 필터링 단어 그룹
-        const EXCLUDED_CAFES = ['스타벅스', '이디야', '컴포즈', '메가', 'MGC', '카페베네', '투썸', '매머드', '커피앳웍스', '백억커피', '할리스', '커피빈', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스'];
-        const EXCLUDED_CATEGORY_KEYWORDS = ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'];
+        // 현재 선택된 메뉴의 설정을 반환하는 함수
+        function getCurrentMenuConfig() {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedMenu = categorySelect?.value || '카페';
+            return MENU_CONFIGS[selectedMenu] || MENU_CONFIGS['카페'];
+        }
         
-        // 3. 슈퍼패스 단어 그룹 (필터링 우회용)
-        const SUPERPASS_KEYWORDS = []; // 카페는 슈퍼패스 키워드 없음
+        // 현재 설정을 변수로 접근하기 위한 헬퍼 함수들
+        function getMenuCategoryGroups() {
+            return getCurrentMenuConfig().categoryGroups;
+        }
+        
+        function getExcludedNames() {
+            return getCurrentMenuConfig().excludedNames;
+        }
+        
+        function getExcludedCategoryKeywords() {
+            return getCurrentMenuConfig().excludedCategoryKeywords;
+        }
+        
+        function getSuperpassKeywords() {
+            return getCurrentMenuConfig().superpassKeywords;
+        }
+        
+        function getSearchMessage() {
+            return getCurrentMenuConfig().searchMessage;
+        }
+        
+        function hasSupplementLogic() {
+            return getCurrentMenuConfig().hasSupplementLogic || false;
+        }
         
         // ============================================
         // API 설정
@@ -644,19 +711,18 @@
             }
         }
 
-        // 네이버 좌표계를 WGS84로 변환
+        // 네이버 좌표계(KATECH/TM128)를 WGS84로 변환 (근사 변환)
         function naverToWGS84(mapx, mapy) {
-            // 네이버 좌표계 (EPSG:5179) -> WGS84 (EPSG:4326)
-            // 네이버 검색 API는 이미 WGS84 좌표를 제공하므로 변환 불필요
-            // 하지만 mapx, mapy가 네이버 좌표계일 수 있으므로 변환
+            // 네이버 검색 API의 mapx, mapy는 KATECH 좌표계
+            // 정확한 변환은 복잡하므로, 카카오 API로 주소→좌표 변환을 주로 사용
+            // 여기서는 대략적인 거리 계산용 근사 변환만 수행
             const x = parseFloat(mapx);
             const y = parseFloat(mapy);
             
-            // 네이버 좌표를 WGS84로 변환 (간단한 선형 변환)
-            // 네이버 좌표계는 한국 전용 좌표계
-            // 대략적인 변환: 네이버 좌표를 10000000으로 나누고 기준점 더하기
-            const lon = (x / 10000000) + 126.9784;
-            const lat = (y / 10000000) + 37.5665;
+            // 간단한 선형 변환 (근사값)
+            // 정확한 변환을 위해서는 PROJ4 같은 라이브러리 필요
+            const lon = 126.9784 + (x - 200000) * 0.000009;
+            const lat = 37.5665 + (y - 500000) * 0.000009;
             
             return { lon, lat };
         }
@@ -733,50 +799,241 @@
         // 필터링 함수
         // ============================================
         
-        // 제외할 프랜차이즈 카페인지 확인
-        function isExcludedCafe(cafeName) {
-            if (!cafeName) return false;
-            const name = cafeName.toLowerCase();
-            return EXCLUDED_CAFES.some(excluded => name.includes(excluded.toLowerCase()));
+        // 제외할 매장인지 확인
+        function isExcludedPlace(placeName) {
+            if (!placeName) return false;
+            const name = placeName.toLowerCase();
+            const excludedNames = getExcludedNames();
+            return excludedNames.some(excluded => name.includes(excluded.toLowerCase()));
         }
         
-        // 카페 카테고리인지 확인 (제외 필터링 단어 그룹 사용)
-        function isCafeCategory(categoryName) {
-            // 카테고리 정보가 없으면 허용 (기본적으로 카페 검색 결과이므로)
+        // 카테고리인지 확인 (제외 필터링 단어 그룹 사용)
+        function isValidCategory(categoryName) {
+            // 카테고리 정보가 없으면 허용
             if (!categoryName) return true;
             
             const category = categoryName.toLowerCase();
-            const isExcluded = EXCLUDED_CATEGORY_KEYWORDS.some(keyword => category.includes(keyword));
+            const excludedKeywords = getExcludedCategoryKeywords();
             
-            // 제외 키워드가 없으면 허용 (카페 검색 결과이므로 대부분 카페일 것)
+            // 카카오 API는 "음식점 > 카페 > 카페" 같은 형식으로 반환할 수 있음
+            // 따라서 카테고리 전체 문자열에서 제외 키워드를 찾되,
+            // "음식점" 같은 상위 카테고리는 무시하고 실제 카테고리만 확인
+            const categoryParts = category.split('>').map(part => part.trim());
+            
+            // 각 카테고리 부분에서 제외 키워드 확인
+            // 단, "음식점" 같은 상위 카테고리는 제외 키워드가 아니면 무시
+            const isExcluded = excludedKeywords.some(keyword => {
+                // 카테고리 전체 문자열에서 키워드 확인
+                if (category.includes(keyword)) {
+                    // 단, "음식점 > 카페" 같은 경우 "음식점"이 제외 키워드가 아니면 허용
+                    // 실제로는 각 부분을 개별적으로 확인
+                    return categoryParts.some(part => part.includes(keyword));
+                }
+                return false;
+            });
+            
+            // 제외 키워드가 없으면 허용
             return !isExcluded;
         }
         
         // 슈퍼패스 키워드가 매장명에 포함되어 있는지 확인
         function hasSuperpassKeyword(placeName) {
-            if (!placeName || SUPERPASS_KEYWORDS.length === 0) return false;
+            if (!placeName) return false;
+            const superpassKeywords = getSuperpassKeywords();
+            if (superpassKeywords.length === 0) return false;
             const name = placeName.toLowerCase();
-            return SUPERPASS_KEYWORDS.some(keyword => name.includes(keyword.toLowerCase()));
+            return superpassKeywords.some(keyword => name.includes(keyword.toLowerCase()));
         }
         
         // ============================================
-        // 카카오 API 검색 함수 (4단계)
+        // 네이버 검색 함수 (4단계 - 네이버 검색 우선)
         // ============================================
         
-        // 카카오 API로 매장 검색 (메뉴 연관 카테고리 그룹 사용)
-        async function searchFromKakaoAPI(baseX, baseY, radius = 500) {
-            const categorySelect = document.getElementById('categorySelect');
-            const selectedCategory = categorySelect.value || MENU_CATEGORY_GROUPS[0];
+        // 네이버 API로 매장 검색 (메뉴 연관 카테고리 그룹 + 주소 사용)
+        async function searchFromNaverAPI(baseX, baseY, baseAddress, radius = 750) {
+            const categoryGroups = getMenuCategoryGroups();
+            const allResults = [];
             
-            const cafeData = await callKakaoAPI('keyword', {
-                query: selectedCategory,
-                x: baseX,
-                y: baseY,
-                radius: radius,
-                size: 15
-            });
+            // 주소에서 구/동 단위 추출 (네이버 검색에 사용)
+            const getAreaFromAddress = (address) => {
+                if (!address) return '';
+                
+                // 주소 형식 예시:
+                // "서울특별시 강남구 테헤란로 152" -> "강남구"
+                // "서울시 강남구 역삼동" -> "강남구 역삼동"
+                // "경기도 성남시 분당구" -> "성남시 분당구"
+                
+                const parts = address.split(' ').filter(p => p.trim());
+                
+                if (parts.length < 2) return '';
+                
+                // 시/도 제거 (첫 번째 요소)
+                const withoutCity = parts.slice(1);
+                
+                // "구"로 끝나는 요소 찾기
+                const guIndex = withoutCity.findIndex(p => p.includes('구'));
+                if (guIndex !== -1) {
+                    const gu = withoutCity[guIndex];
+                    // 구 다음에 "동"이 있으면 함께 반환
+                    if (guIndex + 1 < withoutCity.length && withoutCity[guIndex + 1].includes('동')) {
+                        return `${gu} ${withoutCity[guIndex + 1]}`;
+                    }
+                    return gu;
+                }
+                
+                // "시"로 끝나는 요소 찾기 (경기도 성남시 분당구 같은 경우)
+                const siIndex = withoutCity.findIndex(p => p.includes('시'));
+                if (siIndex !== -1 && siIndex + 1 < withoutCity.length) {
+                    const si = withoutCity[siIndex];
+                    const nextPart = withoutCity[siIndex + 1];
+                    if (nextPart.includes('구')) {
+                        return `${si} ${nextPart}`;
+                    }
+                }
+                
+                // 구를 찾지 못했으면 두 번째 요소만 반환 (대부분 구)
+                return withoutCity[0] || '';
+            };
             
-            return cafeData.documents || [];
+            const area = getAreaFromAddress(baseAddress);
+            console.log('네이버 검색 - 기준 주소:', baseAddress, '추출된 지역:', area);
+            
+            // 각 카테고리 그룹에 대해 네이버 검색 수행
+            for (const category of categoryGroups) {
+                try {
+                    // 네이버 검색: 카테고리 + 지역 (지역이 있으면 추가, 없으면 카테고리만)
+                    let searchQuery = category;
+                    if (area) {
+                        searchQuery = `${category} ${area}`;
+                    }
+                    
+                    console.log('네이버 검색 쿼리:', searchQuery);
+                    
+                    const data = await callNaverAPI('local', {
+                        query: searchQuery,
+                        display: 100, // 네이버 검색은 더 많은 결과 가능
+                        sort: 'random'
+                    });
+                    
+                    console.log(`카테고리 "${category}" 검색 결과:`, data.items?.length || 0, '개');
+                    
+                    if (data.items && data.items.length > 0) {
+                        // 네이버 검색 결과를 표준 형식으로 변환
+                        const convertedResults = data.items.map(item => {
+                            const title = (item.title || '').replace(/<[^>]*>/g, '');
+                            const category = (item.category || '').replace(/<[^>]*>/g, '');
+                            const address = (item.address || '').replace(/<[^>]*>/g, '');
+                            const roadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
+                            
+                            // 네이버 좌표는 부정확하므로 거리 필터링을 하지 않음
+                            // 정확한 좌표와 거리는 enrichWithAddress에서 카카오 API로 변환 후 계산됨
+                            // 여기서는 임시 좌표만 설정 (나중에 정확히 변환됨)
+                            let lon = baseX;
+                            let lat = baseY;
+                            let distance = 0; // 거리는 나중에 정확히 계산
+                            
+                            // 네이버 좌표가 있으면 근사값으로 설정 (거리 필터링은 하지 않음)
+                            if (item.mapx && item.mapy) {
+                                const coords = naverToWGS84(parseFloat(item.mapx), parseFloat(item.mapy));
+                                lon = coords.lon;
+                                lat = coords.lat;
+                                // 거리는 나중에 정확한 좌표로 재계산하므로 여기서는 계산하지 않음
+                            }
+                            
+                            // 카카오 API 형식과 유사하게 변환
+                            // 좌표는 enrichWithAddress에서 카카오 API로 정확히 변환됨
+                            return {
+                                id: item.link || title, // 네이버 링크 또는 제목을 ID로 사용
+                                place_name: title,
+                                category_name: category,
+                                address_name: address,
+                                road_address: {
+                                    address_name: roadAddress
+                                },
+                                x: lon.toString(), // 임시 좌표 (나중에 정확히 변환)
+                                y: lat.toString(), // 임시 좌표 (나중에 정확히 변환)
+                                distance: distance, // 임시 거리 (나중에 정확히 계산)
+                                displayAddress: roadAddress || address,
+                                _naverData: item, // 원본 네이버 데이터 보관
+                                _needsCoordConversion: true // 좌표 변환이 필요함을 표시
+                            };
+                        }).filter(item => item !== null); // null 제거
+                        
+                        console.log(`카테고리 "${category}" 변환 후 결과:`, convertedResults.length, '개 (거리 필터링 없음 - 나중에 정확한 좌표로 재계산)');
+                        allResults.push(...convertedResults);
+                    } else {
+                        console.log(`카테고리 "${category}" 검색 결과 없음`);
+                    }
+                    
+                    // API 호출 간 지연 (rate limiting)
+                    if (categoryGroups.indexOf(category) < categoryGroups.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                } catch (error) {
+                    console.warn(`카테고리 "${category}" 네이버 검색 실패:`, error);
+                }
+            }
+            
+            // 중복 제거 (place_name + 주소 기준)
+            const uniqueResults = [];
+            const seenKeys = new Set();
+            
+            for (const doc of allResults) {
+                const key = `${doc.place_name}_${doc.road_address?.address_name || doc.address_name || ''}`;
+                if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    uniqueResults.push(doc);
+                }
+            }
+            
+            // 거리순 정렬
+            uniqueResults.sort((a, b) => a.distance - b.distance);
+            
+            console.log('네이버 검색 최종 집계:', uniqueResults.length, '개 (중복 제거 후)');
+            return uniqueResults;
+        }
+        
+        // 카카오 API로 매장 검색 (보조용 - 필요시 사용)
+        async function searchFromKakaoAPI(baseX, baseY, radius = 750) {
+            const categoryGroups = getMenuCategoryGroups();
+            const allResults = [];
+            
+            // 각 카테고리 그룹에 대해 검색 수행
+            for (const category of categoryGroups) {
+                try {
+                    const data = await callKakaoAPI('keyword', {
+                        query: category,
+                        x: baseX,
+                        y: baseY,
+                        radius: radius,
+                        size: 15
+                    });
+                    
+                    if (data.documents && data.documents.length > 0) {
+                        allResults.push(...data.documents);
+                    }
+                    
+                    // API 호출 간 지연 (rate limiting)
+                    if (categoryGroups.indexOf(category) < categoryGroups.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (error) {
+                    console.warn(`카테고리 "${category}" 검색 실패:`, error);
+                }
+            }
+            
+            // 중복 제거 (place_id 기준)
+            const uniqueResults = [];
+            const seenIds = new Set();
+            
+            for (const doc of allResults) {
+                if (doc.id && !seenIds.has(doc.id)) {
+                    seenIds.add(doc.id);
+                    uniqueResults.push(doc);
+                }
+            }
+            
+            return uniqueResults;
         }
         
         // ============================================
@@ -785,21 +1042,34 @@
         
         // 카카오 API 검색 결과 처리 및 필터링 (제외 필터링 단어 그룹 적용)
         function processSearchResults(documents, baseX, baseY) {
-            return documents
+            console.log('processSearchResults 입력:', documents.length, '개');
+            
+            const filtered = documents
                 .filter(doc => {
                     // 카테고리 필터링
                     const categoryName = doc.category_name || '';
-                    if (!isCafeCategory(categoryName)) {
+                    const isValid = isValidCategory(categoryName);
+                    if (!isValid) {
+                        console.log(`카테고리 필터링 제외 [${doc.place_name}]: 카테고리="${categoryName}"`);
                         return false;
                     }
-                    // 프랜차이즈 제외
-                    const cafeName = doc.place_name || '';
-                    return !isExcludedCafe(cafeName);
+                    // 제외 매장 필터링
+                    const placeName = doc.place_name || '';
+                    const isExcluded = isExcludedPlace(placeName);
+                    if (isExcluded) {
+                        console.log(`제외 매장 필터링 제외 [${placeName}]`);
+                        return false;
+                    }
+                    return true;
                 })
                 .map(doc => {
                     const cafeX = parseFloat(doc.x);
                     const cafeY = parseFloat(doc.y);
-                    const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
+                    // 거리는 이미 계산되어 있으면 사용, 없으면 계산
+                    let distance = doc.distance;
+                    if (distance === undefined || distance === null) {
+                        distance = calculateDistance(baseY, baseX, cafeY, cafeX);
+                    }
                     
                     const roadAddr = (doc.road_address && doc.road_address.address_name) 
                         ? doc.road_address.address_name 
@@ -818,38 +1088,89 @@
                         y: cafeY,
                         distance: distance,
                         categoryName: doc.category_name || '',
-                        doc: doc
+                        doc: doc,
+                        // 원본 데이터 속성 보존
+                        _naverData: doc._naverData,
+                        _fromKakao: doc._fromKakao,
+                        _needsCoordConversion: doc._needsCoordConversion
                     };
-                })
-                .filter(cafe => cafe.distance <= 500)
-                .sort((a, b) => a.distance - b.distance);
+                });
+            
+            // 거리 필터링은 나중에 정확한 좌표로 재계산한 후 수행
+            // 여기서는 정렬만 수행
+            filtered.sort((a, b) => a.distance - b.distance);
+            console.log('processSearchResults 출력:', filtered.length, '개');
+            return filtered;
         }
         
-        // 주소 재조회 공통 함수
-        async function enrichWithAddress(cafes) {
-            return Promise.all(cafes.map(async (cafe) => {
-                if (!cafe.roadAddress && cafe.x && cafe.y) {
+        // 주소 재조회 및 좌표 보완 공통 함수
+        async function enrichWithAddress(places) {
+            return Promise.all(places.map(async (place) => {
+                // 카카오 검색 결과는 이미 정확한 좌표를 가지고 있으므로 변환 불필요
+                // 네이버 검색 결과인 경우만 좌표 변환 (현재는 사용하지 않음)
+                if (place._needsCoordConversion && place.displayAddress && !place._fromKakao) {
                     try {
-                        const coordData = await callKakaoAPI('coord2address', {
-                            x: cafe.x,
-                            y: cafe.y
+                        // 주소를 이용해 카카오 API로 정확한 좌표 변환
+                        const coordData = await callKakaoAPI('address', {
+                            query: place.displayAddress,
+                            size: 1
                         });
                         
                         if (coordData.documents?.length > 0) {
                             const doc = coordData.documents[0];
-                            const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                ? doc.road_address.address_name 
-                                : '';
+                            const newX = parseFloat(doc.x);
+                            const newY = parseFloat(doc.y);
+                            
+                            // 좌표 변환 성공
+                            place.x = newX.toString();
+                            place.y = newY.toString();
+                            
+                            // 주소 정보 보완
+                            const roadAddr = doc.road_address?.address_name || '';
                             if (roadAddr) {
-                                cafe.roadAddress = roadAddr;
-                                cafe.displayAddress = roadAddr;
+                                place.roadAddress = roadAddr;
+                                place.displayAddress = roadAddr;
+                            }
+                            
+                            console.log(`좌표 변환 성공 [${place.name}]: ${place.displayAddress} -> (${newX.toFixed(6)}, ${newY.toFixed(6)})`);
+                        } else {
+                            console.warn(`좌표 변환 실패 [${place.name}]: 주소 검색 결과 없음 - ${place.displayAddress}`);
+                            // 좌표 변환 실패 시 기존 좌표 유지
+                            // 원본 네이버 좌표를 사용하도록 표시
+                            place._coordConversionFailed = true;
+                        }
+                    } catch (error) {
+                        console.warn(`좌표 정확화 실패 [${place.name}]:`, error, '- 주소:', place.displayAddress);
+                        // 좌표 변환 실패 시 기존 좌표 유지
+                        place._coordConversionFailed = true;
+                    }
+                }
+                
+                // 도로명 주소가 없으면 좌표로 주소 조회 (기존 로직)
+                if (!place.roadAddress && place.x && place.y && !place._needsCoordConversion) {
+                    try {
+                        const coordData = await callKakaoAPI('coord2address', {
+                            x: place.x,
+                            y: place.y
+                        });
+                        
+                        if (coordData.documents?.length > 0) {
+                            const doc = coordData.documents[0];
+                            const roadAddr = doc.road_address?.address_name || '';
+                            if (roadAddr) {
+                                place.roadAddress = roadAddr;
+                                place.displayAddress = roadAddr;
                             }
                         }
                     } catch (error) {
-                        console.warn('주소 재조회 실패:', cafe.name, error);
+                        console.warn('주소 재조회 실패:', place.name, error);
                     }
                 }
-                return cafe;
+                
+                // _needsCoordConversion 플래그는 거리 필터링에서 사용하므로 유지
+                // delete place._needsCoordConversion; // 주석 처리
+                
+                return place;
             }));
         }
 
@@ -898,15 +1219,26 @@
             return floorInfo;
         }
 
-        // 카페 목록 렌더링 공통 함수 (성능 최적화: DocumentFragment 사용)
-        function renderCafeList(cafes, resultsHeader, resultsSection, cafeList) {
-            resultsHeader.textContent = `주변의 ${cafes.length}개 카페입니다. (프랜차이즈 제외)`;
+        // 매장 목록 렌더링 공통 함수 (성능 최적화: DocumentFragment 사용)
+        function renderCafeList(places, resultsHeader, resultsSection, cafeList) {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedMenu = categorySelect?.value || '카페';
+            const menuNames = {
+                '카페': '카페',
+                '마라탕': '마라탕 매장',
+                '빵': '빵집',
+                '국밥': '국밥 매장',
+                '김밥': '김밥 집'
+            };
+            const menuName = menuNames[selectedMenu] || '매장';
+            const suffix = selectedMenu === '카페' ? ' (프랜차이즈 제외)' : '';
+            resultsHeader.textContent = `주변의 ${places.length}개 ${menuName}입니다.${suffix}`;
             resultsSection.style.display = 'block';
             
             // DocumentFragment 사용으로 DOM 리플로우 최소화
             const fragment = document.createDocumentFragment();
             
-            for (const cafe of cafes) {
+            for (const cafe of places) {
                 const li = document.createElement('li');
                 li.className = 'cafe-item';
                 
@@ -939,282 +1271,128 @@
         }
 
 
-        // 카페 요약 설명 생성 (네이버 블로그 리뷰에서 50-70자 요약)
-        async function extractCafeSummary(cafeName, cafeAddress) {
-            try {
-                // 카페 이름과 주소를 조합하여 검색어 생성
-                const searchQuery = cafeAddress 
-                    ? `${cafeName} ${cafeAddress.split(' ').slice(0, 3).join(' ')}`
-                    : cafeName;
-                
-                // 네이버 블로그 검색 API 호출
-                const blogData = await callNaverAPI('blog', {
-                    query: searchQuery,
-                    display: 20, // 요약을 위해 충분한 리뷰 수집
-                    sort: 'sim'  // 관련도순 정렬
-                });
-
-                if (!blogData.items || blogData.items.length === 0) {
-                    return '';
-                }
-
-                // 모든 블로그 포스트의 제목과 설명을 합쳐서 텍스트 분석
-                const allText = blogData.items
-                    .map(item => {
-                        // HTML 태그 제거
-                        const title = (item.title || '').replace(/<[^>]*>/g, ' ');
-                        const description = (item.description || '').replace(/<[^>]*>/g, ' ');
-                        return `${title} ${description}`;
-                    })
-                    .join(' ');
-
-                // 주요 특징 패턴 분석
-                const features = {
-                    분위기: [],
-                    메뉴: [],
-                    특징: []
-                };
-
-                // 분위기 관련 키워드
-                const atmospherePatterns = [
-                    { pattern: /아늑|편안|조용|차분|힐링|여유/gi, keyword: '아늑한' },
-                    { pattern: /넓|공간|여유|여유로운/gi, keyword: '넓은' },
-                    { pattern: /예쁜|예술|인테리어|디자인|깔끔/gi, keyword: '예쁜' },
-                    { pattern: /로맨틱|데이트|커플/gi, keyword: '로맨틱한' },
-                    { pattern: /스터디|공부|조용|집중/gi, keyword: '스터디하기 좋은' }
-                ];
-
-                // 메뉴 관련 키워드
-                const menuPatterns = [
-                    { pattern: /케이크|마카롱|디저트/gi, keyword: '디저트' },
-                    { pattern: /원두|로스팅|드립/gi, keyword: '원두' },
-                    { pattern: /브런치|샐러드|토스트/gi, keyword: '브런치' },
-                    { pattern: /베이커리|빵|베이글/gi, keyword: '베이커리' }
-                ];
-
-                // 특징 관련 키워드 (주차 제외)
-                const specialPatterns = [
-                    { pattern: /펫|반려동물|강아지|고양이/gi, keyword: '펫카페' },
-                    { pattern: /북|책|독서/gi, keyword: '북카페' },
-                    { pattern: /테라스|야외|루프탑/gi, keyword: '야외석' }
-                ];
-
-                // 패턴 매칭 및 빈도 계산 (성능 최적화: for...of 사용)
-                for (const { pattern, keyword } of atmospherePatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        features.분위기.push({ keyword, count: matches.length });
-                    }
-                }
-
-                for (const { pattern, keyword } of menuPatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        features.메뉴.push({ keyword, count: matches.length });
-                    }
-                }
-
-                for (const { pattern, keyword } of specialPatterns) {
-                    const matches = allText.match(pattern);
-                    if (matches && matches.length > 0) {
-                        features.특징.push({ keyword, count: matches.length });
-                    }
-                }
-
-                // 빈도순으로 정렬
-                features.분위기.sort((a, b) => b.count - a.count);
-                features.메뉴.sort((a, b) => b.count - a.count);
-                features.특징.sort((a, b) => b.count - a.count);
-
-                // 요약 문장 생성
-                const summaryParts = [];
-
-                // 분위기 추가
-                if (features.분위기.length > 0) {
-                    summaryParts.push(features.분위기[0].keyword);
-                }
-
-                // 메뉴 추가
-                if (features.메뉴.length > 0) {
-                    summaryParts.push(features.메뉴[0].keyword);
-                }
-
-                // 특징 추가
-                if (features.특징.length > 0) {
-                    summaryParts.push(features.특징[0].keyword);
-                }
-
-                // 리뷰 텍스트에서 실제 표현 추출 (하드 코딩 문구 제거)
-                // 리뷰 문장들을 분석하여 자연스러운 표현 추출
-                const sentences = allText.split(/[\.!?。！？]/).filter(s => s.trim().length > 5);
-                
-                // 카페 특징과 관련된 문장 추출
-                const relevantSentences = sentences.filter(sentence => {
-                    const lowerSentence = sentence.toLowerCase();
-                    return /분위기|맛|메뉴|커피|디저트|인테리어|공간|편안|좋|추천|인기|특별/.test(lowerSentence) &&
-                           !/주차|주차장|파킹/.test(lowerSentence); // 주차 언급 제외
-                });
-
-                // 요약 문장 생성 (50-70자, 실시간 리뷰 분석)
-                let summary = '';
-                
-                if (relevantSentences.length > 0) {
-                    // 리뷰에서 실제 사용된 표현 추출
-                    const atmosphere = features.분위기.length > 0 ? features.분위기[0].keyword : '';
-                    const menu = features.메뉴.length > 0 ? features.메뉴[0].keyword : '';
-                    const special = features.특징.length > 0 ? features.특징[0].keyword : '';
-                    
-                    // 리뷰에서 실제 표현 패턴 찾기
-                    const expressionPatterns = [
-                        { pattern: /([^\.!?]{10,30})(?:이|가|을|를|은|는|에|에서|으로|로|와|과|의|이다|입니다|해요|했어요|했어|해|한다|한다고|한다는)/g, type: 'descriptive' },
-                        { pattern: /([^\.!?]{8,25})(?:좋|추천|인기|맛있|특별|예쁜|깔끔|편안)/g, type: 'positive' }
-                    ];
-                    
-                    const extractedPhrases = [];
-                    // 성능 최적화: for...of 사용
-                    for (const sentence of relevantSentences) {
-                        for (const { pattern, type } of expressionPatterns) {
-                            const matches = sentence.match(pattern);
-                            if (matches) {
-                                for (const match of matches) {
-                                    const cleanMatch = match.trim().replace(/[\.!?。！？]$/, '');
-                                    if (cleanMatch.length >= 8 && cleanMatch.length <= 30) {
-                                        extractedPhrases.push(cleanMatch);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // 추출된 표현들을 조합하여 자연스러운 문장 생성
-                    if (atmosphere && menu && special) {
-                        // 리뷰에서 실제 표현 찾기
-                        const atmospherePhrase = extractedPhrases.find(p => 
-                            new RegExp(atmosphere.replace(/한|한$/, ''), 'i').test(p)
-                        ) || `${atmosphere} 분위기`;
-                        
-                        summary = `${atmospherePhrase}로 ${menu}와 ${special}가 특징인 카페입니다.`;
-                    } else if (atmosphere && menu) {
-                        const atmospherePhrase = extractedPhrases.find(p => 
-                            new RegExp(atmosphere.replace(/한|한$/, ''), 'i').test(p)
-                        ) || `${atmosphere} 분위기`;
-                        
-                        summary = `${atmospherePhrase}와 ${menu}가 유명한 카페입니다.`;
-                    } else if (atmosphere && special) {
-                        const atmospherePhrase = extractedPhrases.find(p => 
-                            new RegExp(atmosphere.replace(/한|한$/, ''), 'i').test(p)
-                        ) || `${atmosphere} 분위기`;
-                        
-                        summary = `${atmospherePhrase}와 ${special}가 특징인 카페입니다.`;
-                    } else if (menu && special) {
-                        summary = `${menu}와 ${special}가 특별한 카페입니다.`;
-                    } else if (atmosphere) {
-                        const atmospherePhrase = extractedPhrases.find(p => 
-                            new RegExp(atmosphere.replace(/한|한$/, ''), 'i').test(p)
-                        ) || `${atmosphere} 분위기`;
-                        
-                        summary = `${atmospherePhrase}가 매력적인 카페입니다.`;
-                    } else if (menu) {
-                        summary = `${menu}가 특히 인기 있는 카페입니다.`;
-                    } else if (special) {
-                        summary = `${special}가 특징인 카페입니다.`;
-                    } else if (extractedPhrases.length > 0) {
-                        // 추출된 표현 사용
-                        const firstPhrase = extractedPhrases[0];
-                        summary = `${firstPhrase} 카페입니다.`;
-                    } else {
-                        // 리뷰에서 직접 문장 추출
-                        const shortSentences = relevantSentences.filter(s => s.length >= 20 && s.length <= 50);
-                        if (shortSentences.length > 0) {
-                            summary = shortSentences[0].trim();
-                        }
-                    }
-                } else {
-                    // 관련 문장이 없으면 특징 키워드로만 구성
-                    const atmosphere = features.분위기.length > 0 ? features.분위기[0].keyword : '';
-                    const menu = features.메뉴.length > 0 ? features.메뉴[0].keyword : '';
-                    const special = features.특징.length > 0 ? features.특징[0].keyword : '';
-                    
-                    if (atmosphere && menu) {
-                        summary = `${atmosphere} 분위기와 ${menu}가 유명한 카페입니다.`;
-                    } else if (atmosphere) {
-                        summary = `${atmosphere} 분위기의 카페입니다.`;
-                    } else if (menu) {
-                        summary = `${menu}가 인기인 카페입니다.`;
-                    } else if (special) {
-                        summary = `${special}가 특징인 카페입니다.`;
-                    }
-                }
-
-                // 최종 길이 확인 및 조정 (50-70자)
-                if (summary.length < 50) {
-                    // 리뷰에서 추가 표현 찾기
-                    const additionalPhrases = sentences
-                        .filter(s => s.length >= 15 && s.length <= 40)
-                        .filter(s => !/주차|주차장|파킹/.test(s))
-                        .slice(0, 3);
-                    
-                    if (additionalPhrases.length > 0) {
-                        const additional = additionalPhrases[0].trim();
-                        if (summary.length + additional.length <= 70) {
-                            summary = summary.replace('입니다.', ` ${additional}입니다.`);
-                        }
-                    }
-                    
-                    // 여전히 짧으면 리뷰에서 직접 추출
-                    if (summary.length < 50) {
-                        const reviewSentences = sentences
-                            .filter(s => s.length >= 25 && s.length <= 45)
-                            .filter(s => !/주차|주차장|파킹/.test(s));
-                        
-                        if (reviewSentences.length > 0) {
-                            summary = reviewSentences[0].trim();
-                        }
-                    }
-                }
-                
-                if (summary.length > 70) {
-                    // 너무 길면 자연스럽게 축약
-                    const sentences = summary.split(/[\.!?。！？]/).filter(s => s.trim().length > 0);
-                    if (sentences.length > 1) {
-                        summary = sentences[0].trim() + '입니다.';
-                        if (summary.length > 70) {
-                            summary = summary.substring(0, 67) + '...';
-                        }
-                    } else {
-                        // 문장이 하나면 중간 부분 제거
-                        if (summary.length > 70) {
-                            const midPoint = Math.floor(summary.length / 2);
-                            summary = summary.substring(0, midPoint - 5) + '...' + summary.substring(midPoint + 5);
-                            if (summary.length > 70) {
-                                summary = summary.substring(0, 67) + '...';
-                            }
-                        }
-                    }
-                }
-
-                // 최소 50자 보장
-                if (summary.length < 50 && summary.length > 0) {
-                    // 리뷰에서 보충 문장 찾기
-                    const supplementSentences = sentences
-                        .filter(s => s.length >= 20 && s.length <= 30)
-                        .filter(s => !/주차|주차장|파킹/.test(s));
-                    
-                    if (supplementSentences.length > 0) {
-                        const supplement = supplementSentences[0].trim();
-                        if (summary.length + supplement.length <= 70) {
-                            summary = summary + ' ' + supplement;
-                        }
-                    }
-                }
-
-                return summary.substring(0, 70); // 최대 70자
-            } catch (error) {
-                console.error('요약 생성 실패:', error);
-                return '';
+        // 매장 검색 및 처리 공통 함수 (중복 제거)
+        async function searchAndProcessPlaces(baseX, baseY, baseAddress, radius = 750) {
+            // 4단계: 카카오 API로 정확한 반경 검색 (750m 이내만 검색)
+            updateProgress(30, getSearchMessage());
+            const kakaoResults = await searchFromKakaoAPI(baseX, baseY, radius);
+            console.log('카카오 검색 결과:', kakaoResults.length, '개');
+            
+            if (kakaoResults.length === 0) {
+                return [];
             }
+            
+            // 카카오 결과를 표준 형식으로 변환
+            const allResults = kakaoResults.map(doc => ({
+                id: doc.id,
+                place_name: doc.place_name,
+                category_name: doc.category_name,
+                address_name: doc.address_name,
+                road_address: doc.road_address,
+                x: doc.x,
+                y: doc.y,
+                distance: calculateDistance(baseY, baseX, parseFloat(doc.y), parseFloat(doc.x)),
+                displayAddress: doc.road_address?.address_name || doc.address_name,
+                _fromKakao: true // 카카오 검색 결과임을 표시
+            }));
+            
+            console.log('카카오 검색 변환 후:', allResults.length, '개');
+            
+            if (allResults.length === 0) {
+                return [];
+            }
+            
+            // 결과 처리 및 필터링
+            updateProgress(50, '검색 결과 필터링 중...');
+            // 네이버 검색 결과는 좌표가 정확하지 않을 수 있으므로, 
+            // processSearchResults에서 거리를 재계산하도록 함
+            const places = processSearchResults(allResults, baseX, baseY);
+            console.log('processSearchResults 후:', places.length, '개');
+            
+            // 거리 필터링: 네이버 검색 결과는 좌표가 부정확하므로 여기서는 필터링하지 않음
+            // 정확한 거리는 나중에 카카오 API로 좌표 변환 후 재계산됨
+            const placesWithinRadius = places.filter(place => {
+                // 네이버 검색 결과는 _naverData가 있고, 거리가 아직 계산되지 않았거나 부정확함
+                if (place._naverData || place._needsCoordConversion) {
+                    // 거리 필터링 없이 모두 포함 (나중에 정확한 거리로 재필터링)
+                    return true;
+                }
+                // 카카오 검색 결과는 정확한 거리 사용
+                return place.distance <= radius;
+            });
+            console.log('거리 필터링 후:', placesWithinRadius.length, '개 (네이버 결과는 필터링 없음)');
+            
+            if (placesWithinRadius.length === 0) {
+                console.log('거리 필터링에서 모든 결과 제거됨');
+                return [];
+            }
+            
+            // 네이버 검색 결과의 좌표를 정확하게 보완
+            updateProgress(60, '주소 정보 보완 중...');
+            const placesWithAddress = await enrichWithAddress(placesWithinRadius);
+            console.log('주소 보완 후:', placesWithAddress.length, '개');
+            
+            // 좌표 보완 후 거리 재계산
+            placesWithAddress.forEach(place => {
+                const placeX = parseFloat(place.x);
+                const placeY = parseFloat(place.y);
+                place.distance = calculateDistance(baseY, baseX, placeY, placeX);
+                // 디버깅: 거리 정보 로그
+                if (place.distance > radius) {
+                    console.log(`매장 "${place.name}" 거리: ${Math.round(place.distance)}m (제외됨)`);
+                }
+            });
+            
+            // 거리순 재정렬
+            placesWithAddress.sort((a, b) => a.distance - b.distance);
+            
+            // 750m 이내만 최종 포함
+            // 카카오 API는 정확한 반경 검색이므로 750m 이내만 필터링
+            const placesFilteredByDistance = placesWithAddress.filter(place => {
+                return place.distance <= radius; // 750m
+            });
+            console.log('최종 거리 필터링 후:', placesFilteredByDistance.length, '개');
+            
+            // 디버깅: 거리 분포 확인
+            if (placesWithAddress.length > 0) {
+                const distances = placesWithAddress.map(p => Math.round(p.distance));
+                console.log('거리 분포:', distances.slice(0, 5), '... (최소:', Math.min(...distances), 'm, 최대:', Math.max(...distances), 'm)');
+            }
+            
+            if (placesFilteredByDistance.length === 0) {
+                console.log('최종 거리 필터링에서 모든 결과 제거됨');
+                // 디버깅: 왜 제거되었는지 확인
+                if (placesWithAddress.length > 0) {
+                    const minDistance = Math.min(...placesWithAddress.map(p => p.distance));
+                    console.log(`가장 가까운 매장 거리: ${Math.round(minDistance)}m (필터링 기준: ${radius}m)`);
+                }
+                return [];
+            }
+            
+            // 검증 단계: 카카오 검색 결과를 네이버 검색으로 검증 (네이버맵에서 검색 가능한지 확인)
+            updateProgress(70, '네이버 지도에서 검색 확인 중...');
+            const result = await processNaverSearchAndFilter(placesFilteredByDistance, false); // 카카오 검색 결과이므로 정상 검증
+            console.log('최종 검증 후 결과:', Array.isArray(result) ? result.length : (result.placesSearchable?.length || 0), '개');
+            
+            // 국밥의 경우 보완 로직 실행
+            if (hasSupplementLogic()) {
+                const { placesSearchable, placesExcluded } = result;
+                
+                // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가
+                updateProgress(85, '추가 매장 검색 중...');
+                const supplementedPlaces = await supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius);
+                
+                // 최종 리스팅: 기존 검색 가능한 매장 + 보완된 한식 매장
+                const finalPlaces = [...placesSearchable, ...supplementedPlaces];
+                // 거리순으로 재정렬
+                finalPlaces.sort((a, b) => a.distance - b.distance);
+                
+                return finalPlaces;
+            }
+            
+            // 일반적인 경우 (카페, 마라탕, 빵집)
+            return result;
         }
-
 
         // 카페 검색
         async function searchCafes(address) {
@@ -1246,37 +1424,21 @@
                 const location = addressData.documents[0];
                 const baseX = parseFloat(location.x);
                 const baseY = parseFloat(location.y);
-                const radius = 500;
+                const radius = 750;
                 
-                // 4단계: 카카오 API로 매장 검색
-                updateProgress(30, '카카오 지도에서 매장 검색 중...');
-                const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
+                // 검색 기준 주소 (네이버 검색에 사용)
+                const searchBaseAddress = address;
                 
-                if (allResults.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-                
-                // 결과 처리 및 필터링
-                updateProgress(50, '검색 결과 필터링 중...');
-                const cafes = processSearchResults(allResults, baseX, baseY);
-                
-                if (cafes.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-                
-                // 주소 재조회
-                updateProgress(60, '주소 정보 보완 중...');
-                const cafesWithAddress = await enrichWithAddress(cafes);
-                
-                // 5단계: 네이버 검색 필터링
-                updateProgress(70, '네이버 지도에서 검색 확인 중...');
-                const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+                updateProgress(30, getSearchMessage());
+                const cafesSearchable = await searchAndProcessPlaces(baseX, baseY, searchBaseAddress, radius);
                 
                 updateProgress(100, '검색 완료!');
+
+                if (cafesSearchable.length === 0) {
+                    loadingEl.style.display = 'none';
+                    showNoResults();
+                    return;
+                }
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
@@ -1310,21 +1472,24 @@
         // 네이버 검색 필터링 함수 (5단계)
         // ============================================
         
-        // 네이버 검색 결과 가져오기 (슈퍼패스 우회 로직 포함)
-        async function getNaverSearchInfo(cafe) {
+        // 네이버 검색 결과 가져오기 (슈퍼패스 우회 로직 포함, 메뉴별 카테고리 확인)
+        async function getNaverSearchInfo(place) {
             try {
+                const categorySelect = document.getElementById('categorySelect');
+                const selectedMenu = categorySelect?.value || '카페';
+                
                 // 슈퍼패스 키워드가 있으면 필터링 우회
-                if (hasSuperpassKeyword(cafe.name)) {
-                    console.log('슈퍼패스 키워드 매장 - 네이버 검색 필터링 우회:', cafe.name);
-                    let floorInfo = cafe.floor || '';
+                if (hasSuperpassKeyword(place.name)) {
+                    console.log('슈퍼패스 키워드 매장 - 네이버 검색 필터링 우회:', place.name);
+                    let floorInfo = place.floor || '';
                     
                     // 층 정보가 없으면 네이버 검색으로 조회 시도
                     if (!floorInfo) {
                         try {
-                            const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+                            const address = place.displayAddress || place.roadAddress || place.address || '';
                             const searchQuery = address
-                                ? `${cafe.name} ${address.split(' ').slice(0, 2).join(' ')}`
-                                : cafe.name;
+                                ? `${place.name} ${address.split(' ').slice(0, 2).join(' ')}`
+                                : place.name;
                             
                             const naverResult = await callNaverAPI('local', {
                                 query: searchQuery,
@@ -1343,7 +1508,7 @@
                                 floorInfo = floorFromTitle || floorFromAddress || '';
                             }
                         } catch (error) {
-                            console.warn('슈퍼패스 매장 층 정보 조회 실패:', cafe.name, error);
+                            console.warn('슈퍼패스 매장 층 정보 조회 실패:', place.name, error);
                         }
                     }
                     
@@ -1351,42 +1516,140 @@
                 }
                 
                 // 일반 필터링 로직 진행
-                const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+                const address = place.displayAddress || place.roadAddress || place.address || '';
                 
-                // 1차 검색: 매장명칭 + 주소
-                let searchQueryWithAddress = cafe.name;
+                // 주소를 네이버맵 검색과 동일하게 처리 (건물번호 제거)
+                const processAddressForSearch = (addr) => {
+                    if (!addr) return '';
+                    const addressParts = addr.split(' ');
+                    // 시/도 제거하고 구/동/로/길 포함
+                    let simplifiedAddress = addressParts.slice(1).join(' ') || addr;
+                    // 건물번호 제거 (마지막 숫자 패턴 제거)
+                    simplifiedAddress = simplifiedAddress.replace(/\s+\d+(\s*번지)?\s*$/, '').trim();
+                    return simplifiedAddress;
+                };
+                
+                // 1차 검색: 매장명칭 + 주소 (건물번호 제외, 네이버맵과 동일)
+                let searchQueryWithAddress = place.name;
                 if (address) {
-                    const addressParts = address.split(' ');
-                    const simplifiedAddress = addressParts.slice(1).join(' ') || address;
-                    searchQueryWithAddress = `${cafe.name} ${simplifiedAddress}`;
+                    const processedAddress = processAddressForSearch(address);
+                    searchQueryWithAddress = `${place.name} ${processedAddress}`;
                 }
                 
                 // 네이버 검색 API로 1차 검색 결과 확인
                 const searchResult = await callNaverAPI('local', {
                     query: searchQueryWithAddress,
-                    display: 5,
+                    display: 10, // 더 많은 결과 확인
                     sort: 'random'
                 });
                 
-                let floorInfo = cafe.floor || '';
+                let floorInfo = place.floor || '';
                 let isSearchable = false;
                 
-                // 검색 결과가 있고, 첫 번째 결과의 이름이 카페 이름과 유사한지 확인
+                // 메뉴별 카테고리 확인 함수
+                const checkCategory = (resultTitle, resultCategory, resultDescription = '') => {
+                    const category = resultCategory || '';
+                    const title = resultTitle.toLowerCase();
+                    const description = resultDescription.toLowerCase();
+                    
+                    if (selectedMenu === '카페') {
+                        return category.includes('카페') || category.includes('cafe') || category.startsWith('카페');
+                    } else if (selectedMenu === '마라탕') {
+                        return category.includes('마라탕') || category.includes('malatang') || 
+                               title.includes('마라탕') || title.includes('마라샹궈');
+                    } else if (selectedMenu === '빵') {
+                        const bakeryKeywords = ['베이커리', 'bakery', '빵집', '제과', '제빵', '빵', 'bread', '파티스리', 'patisserie',
+                            '소보로', '단팥빵', '크림빵', '식빵', '바게트', 'baguette', '크루아상', 'croissant', '베이글', 'bagel',
+                            '케이크', 'cake', '도넛', 'donut', '머핀', 'muffin', '쿠키', 'cookie'];
+                        const hasBakeryKeyword = bakeryKeywords.some(keyword => category.includes(keyword));
+                        const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
+                        const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
+                        return hasBakeryKeyword && !isExcluded;
+                    } else if (selectedMenu === '국밥') {
+                        // 국밥 카테고리는 '한식' 포함 또는 이름/설명에 국밥 관련 키워드 확인
+                        const soupKeywords = ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '해장국', '감자탕', '육개장'];
+                        const menuText = `${title} ${description}`.toLowerCase();
+                        return category.includes('한식') || category.includes('korean') || 
+                               soupKeywords.some(keyword => menuText.includes(keyword.toLowerCase()));
+                    } else if (selectedMenu === '김밥') {
+                        // 김밥 카테고리는 분식, 김밥 관련 키워드 확인
+                        const kimbapKeywords = ['김밥', 'kimbap', '김밥천국', '김밥집', '분식', '분식집'];
+                        const menuText = `${title} ${description}`.toLowerCase();
+                        return kimbapKeywords.some(keyword => 
+                            category.includes(keyword) || menuText.includes(keyword.toLowerCase())
+                        );
+                    }
+                    return false;
+                };
+                
+                // 주소 매칭 확인 함수 (더 엄격한 매칭)
+                const checkAddressMatch = (resultAddress, resultRoadAddress, originalAddress) => {
+                    if (!originalAddress) return true; // 원본 주소가 없으면 통과
+                    
+                    const processedOriginal = processAddressForSearch(originalAddress).toLowerCase();
+                    const processedRoad = processAddressForSearch(resultRoadAddress || '').toLowerCase();
+                    const processedAddress = processAddressForSearch(resultAddress || '').toLowerCase();
+                    
+                    // 도로명 주소 우선 매칭
+                    if (resultRoadAddress) {
+                        // 핵심 키워드 추출 (구, 동, 로, 길 등)
+                        const originalKeyParts = processedOriginal.split(' ').filter(part => 
+                            part.length > 1 && !/^\d+$/.test(part)
+                        );
+                        const roadKeyParts = processedRoad.split(' ').filter(part => 
+                            part.length > 1 && !/^\d+$/.test(part)
+                        );
+                        
+                        // 주요 키워드가 일치하는지 확인 (2개 이상 일치)
+                        const matchingParts = originalKeyParts.filter(part => 
+                            roadKeyParts.some(rPart => rPart.includes(part) || part.includes(rPart))
+                        );
+                        if (matchingParts.length >= Math.min(2, originalKeyParts.length)) {
+                            return true;
+                        }
+                    }
+                    
+                    // 지번 주소 매칭
+                    if (resultAddress) {
+                        const originalKeyParts = processedOriginal.split(' ').filter(part => 
+                            part.length > 1 && !/^\d+$/.test(part)
+                        );
+                        const addressKeyParts = processedAddress.split(' ').filter(part => 
+                            part.length > 1 && !/^\d+$/.test(part)
+                        );
+                        
+                        const matchingParts = originalKeyParts.filter(part => 
+                            addressKeyParts.some(aPart => aPart.includes(part) || part.includes(aPart))
+                        );
+                        if (matchingParts.length >= Math.min(2, originalKeyParts.length)) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                };
+                
+                // 검색 결과가 있고, 첫 번째 결과가 매장과 정확히 일치하는지 확인
                 if (searchResult.items && searchResult.items.length > 0) {
-                    // 여러 결과 중에서 카페 이름과 일치하는 것을 찾기
+                    // 첫 번째 결과부터 확인 (우선순위가 높은 결과부터)
                     for (const item of searchResult.items) {
                         const resultTitle = (item.title || '').replace(/<[^>]*>/g, '');
                         const resultCategory = (item.category || '').toLowerCase();
+                        const resultDescription = (item.description || '').replace(/<[^>]*>/g, '').toLowerCase();
                         const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
                         const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
                         
-                        // 카페 이름이 검색 결과 제목에 포함되어 있는지 확인
-                        const nameMatches = resultTitle.includes(cafe.name) || cafe.name.includes(resultTitle.split(' ')[0]);
+                        // 1. 매장 이름이 검색 결과 제목에 정확히 포함되어 있는지 확인
+                        const nameMatches = resultTitle.includes(place.name) || place.name.includes(resultTitle.split(' ')[0]);
                         
-                        // 카테고리가 "카페"인지 확인
-                        const isCafeCategory = resultCategory && (resultCategory.includes('카페') || resultCategory.includes('cafe') || resultCategory.startsWith('카페'));
+                        // 2. 주소 매칭 확인 (강화된 검증)
+                        const addressMatches = checkAddressMatch(resultAddress, resultRoadAddress, address);
                         
-                        if (nameMatches && isCafeCategory) {
+                        // 3. 메뉴별 카테고리 확인
+                        const isValidCategory = checkCategory(resultTitle, resultCategory, resultDescription);
+                        
+                        // 모든 조건이 충족되어야 검색 가능으로 판단
+                        if (nameMatches && addressMatches && isValidCategory) {
                             isSearchable = true;
                             // 층 정보가 없으면 추출
                             if (!floorInfo) {
@@ -1399,29 +1662,36 @@
                     }
                 }
                 
-                // 1차 검색 실패 시 2차 검색: 매장명칭만
-                if (!isSearchable) {
+                // 1차 검색 실패 시 2차 검색: 매장명칭만 (주소 없이 검색)
+                // 주의: 매장명칭만으로 검색할 때는 주소 매칭이 어렵기 때문에 더 엄격한 이름 매칭 적용
+                if (!isSearchable && address) {
+                    // 주소가 있을 때만 매장명칭만으로 2차 검색 시도
                     const searchResultNameOnly = await callNaverAPI('local', {
-                        query: cafe.name,
-                        display: 5,
+                        query: place.name,
+                        display: 10, // 더 많은 결과 확인
                         sort: 'random'
                     });
                     
-                    // 매장명칭만으로 검색 결과 확인
+                    // 매장명칭만으로 검색 결과 확인 (주소 매칭 필수)
                     if (searchResultNameOnly.items && searchResultNameOnly.items.length > 0) {
                         for (const item of searchResultNameOnly.items) {
                             const resultTitle = (item.title || '').replace(/<[^>]*>/g, '');
                             const resultCategory = (item.category || '').toLowerCase();
+                            const resultDescription = (item.description || '').replace(/<[^>]*>/g, '').toLowerCase();
                             const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
                             const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
                             
-                            // 카페 이름이 검색 결과 제목에 포함되어 있는지 확인
-                            const nameMatches = resultTitle.includes(cafe.name) || cafe.name.includes(resultTitle.split(' ')[0]);
+                            // 1. 매장 이름이 검색 결과 제목에 정확히 포함되어 있는지 확인 (더 엄격)
+                            const nameMatches = resultTitle.includes(place.name) || place.name.includes(resultTitle.split(' ')[0]);
                             
-                            // 카테고리가 "카페"인지 확인
-                            const isCafeCategory = resultCategory && (resultCategory.includes('카페') || resultCategory.includes('cafe') || resultCategory.startsWith('카페'));
+                            // 2. 주소 매칭 확인 (매장명만 검색이므로 주소 매칭 필수)
+                            const addressMatches = checkAddressMatch(resultAddress, resultRoadAddress, address);
                             
-                            if (nameMatches && isCafeCategory) {
+                            // 3. 메뉴별 카테고리 확인
+                            const isValidCategory = checkCategory(resultTitle, resultCategory, resultDescription);
+                            
+                            // 모든 조건이 충족되어야 검색 가능으로 판단
+                            if (nameMatches && addressMatches && isValidCategory) {
                                 isSearchable = true;
                                 // 층 정보가 없으면 추출
                                 if (!floorInfo) {
@@ -1437,20 +1707,95 @@
                 
                 return { isSearchable, floorInfo };
             } catch (error) {
-                console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
+                console.warn('네이버 검색 정보 조회 실패:', place.name, error);
                 // 에러 발생 시 검색 가능한 것으로 간주하지 않음
-                return { isSearchable: false, floorInfo: cafe.floor || '' };
+                return { isSearchable: false, floorInfo: place.floor || '' };
             }
         }
         
         // 네이버 검색 및 필터링 공통 함수 (5단계)
-        async function processNaverSearchAndFilter(cafesWithAddress) {
-            const cafesSearchable = [];
+        async function processNaverSearchAndFilter(placesWithAddress, isFromNaverSearch = false) {
+            const placesSearchable = [];
+            const placesExcluded = []; // 국밥의 경우 제외된 매장들 저장
             const batchSize = 5;
-            const totalBatches = Math.ceil(cafesWithAddress.length / batchSize);
+            const totalBatches = Math.ceil(placesWithAddress.length / batchSize);
+            const needExcludedList = hasSupplementLogic(); // 국밥의 경우 true
             
-            for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
-                const batch = cafesWithAddress.slice(i, i + batchSize);
+            // 네이버 검색으로 선정된 매장인 경우 검증 간소화
+            if (isFromNaverSearch) {
+                // 이미 네이버맵에 있는 매장이므로, 카테고리 확인만 수행
+                for (const place of placesWithAddress) {
+                    const categorySelect = document.getElementById('categorySelect');
+                    const selectedMenu = categorySelect?.value || '카페';
+                    
+                    // 슈퍼패스 키워드 확인
+                    if (hasSuperpassKeyword(place.name)) {
+                        placesSearchable.push(place);
+                        continue;
+                    }
+                    
+                    // 카카오 검색 결과는 이미 processSearchResults에서 필터링되었으므로
+                    // 네이버 검색 우선 모드에서는 카테고리 확인을 더 관대하게 수행
+                    if (place._fromKakao) {
+                        // 카카오 검색 결과는 이미 카테고리 필터링을 받았으므로 포함
+                        placesSearchable.push(place);
+                        continue;
+                    }
+                    
+                    // 네이버 검색 결과만 카테고리 확인
+                    const categoryName = place.category_name || '';
+                    const checkCategory = (categoryName) => {
+                        const category = (categoryName || '').toLowerCase();
+                        
+                        if (selectedMenu === '카페') {
+                            return category.includes('카페') || category.includes('cafe') || category.startsWith('카페');
+                        } else if (selectedMenu === '마라탕') {
+                            return category.includes('마라탕') || category.includes('malatang');
+                        } else if (selectedMenu === '빵') {
+                            const bakeryKeywords = ['베이커리', 'bakery', '빵집', '제과', '제빵', '빵', 'bread', '파티스리', 'patisserie'];
+                            const hasBakeryKeyword = bakeryKeywords.some(keyword => category.includes(keyword));
+                            const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
+                            const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
+                            return hasBakeryKeyword && !isExcluded;
+                        } else if (selectedMenu === '국밥') {
+                            // 국밥은 카테고리나 이름에 국밥 관련 키워드 확인
+                            const soupKeywords = ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '해장국', '감자탕', '육개장'];
+                            const title = place.name.toLowerCase();
+                            const desc = (place._naverData?.description || '').replace(/<[^>]*>/g, '').toLowerCase();
+                            const menuText = `${title} ${desc} ${categoryName}`.toLowerCase();
+                            return categoryName.includes('한식') || categoryName.includes('korean') ||
+                                   soupKeywords.some(keyword => menuText.includes(keyword.toLowerCase()));
+                        } else if (selectedMenu === '김밥') {
+                            // 김밥은 카테고리나 이름에 김밥/분식 관련 키워드 확인
+                            const kimbapKeywords = ['김밥', 'kimbap', '김밥천국', '김밥집', '분식', '분식집'];
+                            const title = place.name.toLowerCase();
+                            const desc = (place._naverData?.description || '').replace(/<[^>]*>/g, '').toLowerCase();
+                            const menuText = `${title} ${desc} ${categoryName}`.toLowerCase();
+                            return kimbapKeywords.some(keyword => 
+                                categoryName.includes(keyword) || menuText.includes(keyword.toLowerCase())
+                            );
+                        }
+                        return true;
+                    };
+                    
+                    if (checkCategory(categoryName)) {
+                        placesSearchable.push(place);
+                    } else if (needExcludedList && selectedMenu === '국밥') {
+                        // 국밥의 경우 추가 확인 후 제외 목록에 추가 (보완 로직에서 처리)
+                        placesExcluded.push(place);
+                    }
+                }
+                
+                // 국밥의 경우 제외된 매장 목록도 반환
+                if (needExcludedList) {
+                    return { placesSearchable, placesExcluded };
+                }
+                
+                return placesSearchable;
+            }
+            
+            for (let i = 0; i < placesWithAddress.length; i += batchSize) {
+                const batch = placesWithAddress.slice(i, i + batchSize);
                 const currentBatch = Math.floor(i / batchSize) + 1;
                 
                 // 프로그레스 업데이트 (70% ~ 95%)
@@ -1458,23 +1803,175 @@
                 updateProgress(progressPercent, `네이버 지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
                 
                 const batchResults = await Promise.all(
-                    batch.map(async (cafe) => {
+                    batch.map(async (place) => {
                         try {
-                            const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
+                            // 슈퍼패스 키워드가 있으면 필터링 우회
+                            if (hasSuperpassKeyword(place.name)) {
+                                console.log(`슈퍼패스 키워드 매장 - 리스팅 제외 필터 우회 [${place.name}]`);
+                                
+                                // 층 정보가 없으면 네이버 검색으로 조회 시도
+                                if (!place.floor) {
+                                    try {
+                                        const address = place.displayAddress || place.roadAddress || place.address || '';
+                                        const searchQuery = address
+                                            ? `${place.name} ${address.split(' ').slice(0, 2).join(' ')}`
+                                            : place.name;
+                                        
+                                        const naverResult = await callNaverAPI('local', {
+                                            query: searchQuery,
+                                            display: 1,
+                                            sort: 'random'
+                                        });
+                                        
+                                        if (naverResult.items?.length > 0) {
+                                            const item = naverResult.items[0];
+                                            const title = (item.title || '').replace(/<[^>]*>/g, '');
+                                            const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
+                                            const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
+                                            
+                                            const floorFromTitle = extractFloorInfo(title);
+                                            const floorFromAddress = extractFloorInfo(resultAddress + ' ' + resultRoadAddress);
+                                            place.floor = floorFromTitle || floorFromAddress || '';
+                                        }
+                                    } catch (error) {
+                                        console.warn('슈퍼패스 매장 층 정보 조회 실패:', place.name, error);
+                                    }
+                                }
+                                
+                                return { place, isSearchable: true };
+                            }
+                            
+                            // 일반 필터링 로직 진행
+                            const { isSearchable, floorInfo } = await getNaverSearchInfo(place);
                             
                             if (isSearchable) {
                                 if (floorInfo) {
-                                    cafe.floor = floorInfo;
+                                    place.floor = floorInfo;
                                 }
-                                console.log(`네이버 검색 가능 및 카테고리 확인 완료 [${cafe.name}]`);
-                                return cafe;
+                                console.log(`네이버 검색 가능 및 카테고리 확인 완료 [${place.name}]`);
+                                return { place, isSearchable: true };
                             } else {
-                                console.log(`네이버 검색 불가능 또는 카테고리가 맞지 않음 - 리스팅 제외 [${cafe.name}]`);
-                                return null;
+                                console.log(`네이버 검색 불가능 또는 카테고리가 맞지 않음 - 리스팅 제외 [${place.name}]`);
+                                return { place, isSearchable: false };
                             }
                         } catch (error) {
-                            console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
-                            console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
+                            console.warn('네이버 검색 정보 조회 실패:', place.name, error);
+                            return { place, isSearchable: false };
+                        }
+                    })
+                );
+                
+                for (const result of batchResults) {
+                    if (result.isSearchable) {
+                        placesSearchable.push(result.place);
+                    } else {
+                        if (needExcludedList) {
+                            placesExcluded.push(result.place);
+                        }
+                    }
+                }
+                
+                if (i + batchSize < placesWithAddress.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            // 국밥의 경우 제외된 매장 목록도 반환
+            if (needExcludedList) {
+                return { placesSearchable, placesExcluded };
+            }
+            
+            // 일반적인 경우 (카페, 마라탕, 빵집)
+            return placesSearchable;
+        }
+
+        // 한식 매장에서 국밥 메뉴 확인 (국밥 전용)
+        function checkKoreanRestaurantWithSoupMenu(item, restaurantName) {
+            const resultTitle = (item.title || '').replace(/<[^>]*>/g, '');
+            const resultCategory = (item.category || '').toLowerCase();
+            const resultDescription = (item.description || '').replace(/<[^>]*>/g, '').toLowerCase();
+            
+            const nameMatches = resultTitle.includes(restaurantName) || restaurantName.includes(resultTitle.split(' ')[0]);
+            const isKoreanFood = resultCategory.includes('한식') || resultCategory.includes('korean');
+            
+            if (nameMatches && isKoreanFood) {
+                const menuText = `${resultTitle} ${resultDescription}`.toLowerCase();
+                const soupKeywords = ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '해장국', '감자탕', '육개장'];
+                const hasSoupMenu = soupKeywords.some(keyword => 
+                    menuText.includes(keyword.toLowerCase())
+                );
+                
+                if (hasSoupMenu) {
+                    return {
+                        isValid: true,
+                        title: resultTitle,
+                        address: (item.address || '').replace(/<[^>]*>/g, ''),
+                        roadAddress: (item.roadAddress || '').replace(/<[^>]*>/g, '')
+                    };
+                }
+            }
+            return { isValid: false };
+        }
+
+        // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가 (국밥 전용)
+        async function supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius = 750) {
+            const supplementedPlaces = [];
+            const batchSize = 5;
+            
+            for (let i = 0; i < placesExcluded.length; i += batchSize) {
+                const batch = placesExcluded.slice(i, i + batchSize);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (place) => {
+                        try {
+                            const address = place.displayAddress || place.roadAddress || place.address || '';
+                            let searchQuery = place.name;
+                            if (address) {
+                                const addressParts = address.split(' ');
+                                const simplifiedAddress = addressParts.slice(1).join(' ') || address;
+                                searchQuery = `${place.name} ${simplifiedAddress}`;
+                            }
+                            
+                            // 1차 검색: 매장명 + 주소
+                            const searchResult = await callNaverAPI('local', {
+                                query: searchQuery,
+                                display: 5,
+                                sort: 'random'
+                            });
+                            
+                            // 1차 및 2차 검색 공통 처리 함수
+                            const processSearchResults = (items) => {
+                                if (!items?.length) return null;
+                                for (const item of items) {
+                                    const checkResult = checkKoreanRestaurantWithSoupMenu(item, place.name);
+                                    if (checkResult.isValid) {
+                                        if (!place.floor) {
+                                            place.floor = extractFloorInfo(checkResult.title) || extractFloorInfo(checkResult.address + ' ' + checkResult.roadAddress) || '';
+                                        }
+                                        console.log(`한식 매장 중 국밥 메뉴 확인 완료 - 리스팅 보완 [${place.name}]`);
+                                        return place;
+                                    }
+                                }
+                                return null;
+                            };
+                            
+                            // 1차 검색: 매장명 + 주소
+                            const result1 = processSearchResults(searchResult.items);
+                            if (result1) return result1;
+                            
+                            // 2차 검색: 매장명만
+                            const searchResultNameOnly = await callNaverAPI('local', {
+                                query: place.name,
+                                display: 5,
+                                sort: 'random'
+                            });
+                            
+                            const result2 = processSearchResults(searchResultNameOnly.items);
+                            if (result2) return result2;
+                            
+                            return null;
+                        } catch (error) {
+                            console.warn('한식 매장 보완 검색 실패:', place.name, error);
                             return null;
                         }
                     })
@@ -1482,80 +1979,85 @@
                 
                 for (const result of batchResults) {
                     if (result) {
-                        cafesSearchable.push(result);
+                        supplementedPlaces.push(result);
                     }
                 }
                 
-                if (i + batchSize < cafesWithAddress.length) {
+                if (i + batchSize < placesExcluded.length) {
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
             }
             
-            return cafesSearchable;
+            return supplementedPlaces;
         }
 
         // 네이버맵으로 이동
-        async function openNaverMap(cafe) {
-            // 카페 이름과 주소를 함께 사용하여 정확한 위치 검색
-            // 도로명 주소 우선, 없으면 지번 주소 사용
-            const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+        function openNaverMap(cafe) {
+            // 매장명과 도로명 주소를 함께 사용하여 정확한 위치 검색
+            const placeName = cafe.name || '';
             
-            // 1차 검색: 매장명칭 + 주소
-            let searchQueryWithAddress = cafe.name;
-            if (address) {
-                // 주소의 핵심 부분만 사용 (예: "서울시 강남구 테헤란로 152" -> "강남구 테헤란로 152")
-                const addressParts = address.split(' ');
-                // 시/도 제거하고 구/동/로/길 포함
-                const simplifiedAddress = addressParts.slice(1).join(' ') || address;
-                searchQueryWithAddress = `${cafe.name} ${simplifiedAddress}`;
+            // 도로명 주소 우선 사용
+            let targetAddress = cafe.roadAddress || '';
+            
+            // 도로명 주소가 없으면 displayAddress 사용
+            if (!targetAddress) {
+                targetAddress = cafe.displayAddress || '';
             }
             
-            // 네이버 검색 API로 1차 검색 결과 확인
-            try {
-                const searchResult = await callNaverAPI('local', {
-                    query: searchQueryWithAddress,
-                    display: 5,
-                    sort: 'random'
-                });
-                
-                // 검색 결과가 있고, 첫 번째 결과의 이름이 카페 이름과 유사한지 확인
-                let searchSuccess = false;
-                if (searchResult.items && searchResult.items.length > 0) {
-                    const firstResult = searchResult.items[0];
-                    const resultTitle = (firstResult.title || '').replace(/<[^>]*>/g, '');
-                    // 카페 이름이 검색 결과 제목에 포함되어 있는지 확인
-                    if (resultTitle.includes(cafe.name) || cafe.name.includes(resultTitle.split(' ')[0])) {
-                        searchSuccess = true;
-                    }
-                }
-                
-                if (searchSuccess) {
-                    // 1차 검색 성공: 매장명칭 + 주소로 네이버맵 열기
-                    const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
-                    window.open(urlWithAddress, '_blank');
-                } else {
-                    // 1차 검색 실패: 매장명칭만으로 네이버맵 열기
-                    const urlNameOnly = `https://map.naver.com/v5/search/${encodeURIComponent(cafe.name)}`;
-                    window.open(urlNameOnly, '_blank');
-                }
-            } catch (error) {
-                // API 호출 실패 시에도 1차 검색(매장명칭 + 주소) 시도
-                console.warn('네이버 검색 API 호출 실패, 1차 검색으로 진행:', error);
-                const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
-                window.open(urlWithAddress, '_blank');
+            // 도로명 주소와 displayAddress가 모두 없으면 지번 주소 사용
+            if (!targetAddress) {
+                targetAddress = cafe.address || '';
             }
+            
+            let searchQuery;
+            if (targetAddress && placeName) {
+                // 주소가 있으면 매장명 + 도로명 주소로 검색
+                // 주소의 건물번호 제거 (도로명까지만 사용)
+                // 예: "서울특별시 강남구 테헤란로 152" -> "서울특별시 강남구 테헤란로"
+                let simplifiedAddress = targetAddress.replace(/\s+\d+(\s*번지)?\s*$/, '').trim();
+                
+                // 매장명 + 도로명 주소로 검색
+                searchQuery = `${placeName} ${simplifiedAddress}`;
+            } else if (placeName) {
+                // 주소가 없으면 매장명만으로 검색
+                searchQuery = placeName;
+            } else {
+                // 매장명도 없으면 주소만 사용
+                searchQuery = targetAddress;
+            }
+            
+            // 검색어 정리: 공백 정리
+            searchQuery = searchQuery.trim().replace(/\s+/g, ' ');
+            
+            // 네이버맵 검색 URL 구성
+            // 형식: https://map.naver.com/v5/search/검색어
+            const encodedQuery = encodeURIComponent(searchQuery);
+            const url = `https://map.naver.com/v5/search/${encodedQuery}`;
+            
+            // 새 창에서 열기
+            window.open(url, '_blank');
         }
 
         // 결과 없음 표시
         function showNoResults() {
             const resultsSection = document.getElementById('resultsSection');
             const cafeList = document.getElementById('cafeList');
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedMenu = categorySelect?.value || '카페';
+            const menuNames = {
+                '카페': '카페',
+                '마라탕': '마라탕 매장',
+                '빵': '빵집',
+                '국밥': '국밥 매장',
+                '김밥': '김밥 집'
+            };
+            const menuName = menuNames[selectedMenu] || '매장';
             
             resultsSection.style.display = 'block';
             cafeList.innerHTML = `
                 <li class="no-results">
                     <div class="no-results-title">검색 결과가 없습니다</div>
-                    <div class="no-results-text">500m 이내에 카페를 찾을 수 없습니다.</div>
+                    <div class="no-results-text">750m 이내에 ${menuName}을(를) 찾을 수 없습니다.</div>
                 </li>
             `;
         }
@@ -1737,37 +2239,21 @@
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
-                const radius = 500;
+                const radius = 750;
                 
-                // 4단계: 카카오 API로 매장 검색
-                updateProgress(30, '카카오 지도에서 매장 검색 중...');
-                const allResults = await searchFromKakaoAPI(baseX, baseY, radius);
+                // 검색 기준 주소 (네이버 검색에 사용)
+                const searchBaseAddress = addressName || '';
                 
-                if (allResults.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-                
-                // 결과 처리 및 필터링
-                updateProgress(50, '검색 결과 필터링 중...');
-                const cafes = processSearchResults(allResults, baseX, baseY);
-                
-                if (cafes.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-                
-                // 주소 재조회
-                updateProgress(60, '주소 정보 보완 중...');
-                const cafesWithAddress = await enrichWithAddress(cafes);
-                
-                // 5단계: 네이버 검색 필터링
-                updateProgress(70, '네이버 지도에서 검색 확인 중...');
-                const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+                updateProgress(30, getSearchMessage());
+                const cafesSearchable = await searchAndProcessPlaces(baseX, baseY, searchBaseAddress, radius);
                 
                 updateProgress(100, '검색 완료!');
+
+                if (cafesSearchable.length === 0) {
+                    loadingEl.style.display = 'none';
+                    showNoResults();
+                    return;
+                }
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
@@ -1800,6 +2286,12 @@
             const resultsSection = document.getElementById('resultsSection');
             const cafeList = document.getElementById('cafeList');
             const resultsHeader = document.getElementById('resultsHeader');
+            const addressInput = document.getElementById('addressInput');
+            
+            // 주소 입력창 먼저 reset
+            if (addressInput) {
+                addressInput.value = '';
+            }
             
             // 버튼 비활성화
             locationButton.disabled = true;
@@ -1890,7 +2382,7 @@
                 // 항상 입력창에 주소 표시
                 addressInput.value = address;
                 
-                // 해당 주소로 카페 검색
+                // 해당 주소로 매장 검색 (주소 정보 전달)
                 await searchCafesByCoordinates(longitude, latitude, address);
                 
             } catch (error) {
@@ -1942,21 +2434,27 @@
             }
         });
 
-        // 카테고리 선택 이벤트
+        // 카테고리 선택 이벤트 (페이지 이동 제거, 설정만 변경)
         const categorySelect = document.getElementById('categorySelect');
         categorySelect.addEventListener('change', (e) => {
-            const selectedCategory = e.target.value;
-            if (selectedCategory === '마라탕') {
-                // 마라탕 선택 시 index2.html로 이동
-                window.location.href = 'index2.html';
-            } else if (selectedCategory === '빵') {
-                // 빵 선택 시 index3.html로 이동
-                window.location.href = 'index3.html';
-            } else if (selectedCategory === '국밥') {
-                // 국밥 선택 시 index4.html로 이동
-                window.location.href = 'index4.html';
+            // 주소 입력창 먼저 reset
+            if (addressInput) {
+                addressInput.value = '';
             }
-            // 카페 선택 시에는 현재 페이지 유지 (기본 동작)
+            
+            // 메뉴 변경 시 검색 결과 초기화
+            const resultsSection = document.getElementById('resultsSection');
+            const cafeList = document.getElementById('cafeList');
+            const resultsHeader = document.getElementById('resultsHeader');
+            const errorEl = document.getElementById('error');
+            
+            if (resultsSection) resultsSection.style.display = 'none';
+            if (cafeList) cafeList.innerHTML = '';
+            if (resultsHeader) resultsHeader.textContent = '';
+            if (errorEl) errorEl.style.display = 'none';
+            
+            // 설정이 자동으로 변경됨 (getCurrentMenuConfig 함수 사용)
+            console.log('메뉴 변경:', e.target.value);
         });
     </script>
 </body>
