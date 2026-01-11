@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>café explorer</title>
+    <title>카페 explorer</title>
     <style>
         * {
             margin: 0;
@@ -70,6 +70,7 @@
             display: flex;
             gap: 12px;
             width: 100%;
+            align-items: center;
         }
 
         .search-input:focus {
@@ -79,8 +80,8 @@
 
         .search-button {
             flex: 1;
-            padding: 16px 32px;
-            font-size: 16px;
+            padding: 12px 24px;
+            font-size: 15px;
             background-color: #4285f4;
             color: white;
             border: none;
@@ -100,8 +101,8 @@
 
         .location-button {
             flex: 0 0 auto;
-            padding: 16px 20px;
-            font-size: 20px;
+            padding: 12px 16px;
+            font-size: 18px;
             background-color: #34a853;
             color: white;
             border: none;
@@ -113,6 +114,35 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .category-select {
+            flex: 0 0 auto;
+            padding: 12px 16px;
+            font-size: 15px;
+            background-color: #ffffff;
+            color: #202124;
+            border: 1px solid #dfe1e5;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235f6368' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .category-select:hover {
+            border-color: #4285f4;
+            box-shadow: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
+        }
+
+        .category-select:focus {
+            border-color: #4285f4;
+            box-shadow: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
         }
 
         .location-button:hover {
@@ -197,12 +227,7 @@
             white-space: nowrap;
         }
 
-        .cafe-summary {
-            font-size: 13px;
-            color: #5f6368;
-            margin-top: 8px;
-            line-height: 1.5;
-        }
+
 
         .loading {
             text-align: center;
@@ -267,6 +292,8 @@
             border: 1px solid #dfe1e5;
             border-radius: 12px;
             margin-top: 8px;
+        }
+
         .address-item {
             padding: 20px;
             border-bottom: 1px solid #f1f3f4;
@@ -344,6 +371,12 @@
                 gap: 10px;
             }
 
+            .category-select {
+                padding: 12px 14px;
+                font-size: 14px;
+                padding-right: 32px;
+            }
+
             .search-input {
                 padding: 14px 18px;
                 font-size: 16px; /* iOS 줌 방지 */
@@ -400,11 +433,7 @@
                 padding: 2px 6px;
             }
 
-            .cafe-summary {
-                font-size: 12px;
-                margin-top: 6px;
-                line-height: 1.4;
-            }
+
 
             .results-header {
                 font-size: 13px;
@@ -469,6 +498,12 @@
                 padding: 12px 16px;
             }
 
+            .category-select {
+                padding: 12px 14px;
+                font-size: 14px;
+                padding-right: 32px;
+            }
+
             .cafe-item {
                 padding: 14px;
             }
@@ -506,12 +541,17 @@
                 flex: 0 0 auto;
                 min-width: 80px;
             }
+
+            .category-select {
+                flex: 0 0 auto;
+                min-width: 80px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>café explorer</h1>
+        <h1>카페 explorer</h1>
         
         <div class="search-section">
             <div class="search-box">
@@ -525,6 +565,11 @@
                 <div class="search-buttons">
                     <button id="searchButton" class="search-button">검색</button>
                     <button id="locationButton" class="location-button" title="현위치">📍</button>
+                    <select id="categorySelect" class="category-select" title="카테고리 선택">
+                        <option value="카페" selected>카페</option>
+                        <option value="마라탕">마라탕</option>
+                        <option value="빵">빵</option>
+                    </select>
                 </div>
             </div>
         </div>
@@ -622,6 +667,7 @@
                 throw error;
             }
         }
+
 
         // 두 좌표 간의 거리 계산 (Haversine formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -1224,10 +1270,12 @@
                 const baseX = parseFloat(location.x); // 경도
                 const baseY = parseFloat(location.y); // 위도
 
-                // 2단계: 카카오 API로 500m 반경 내 카페 검색 (반경 검색 지원)
+                // 2단계: 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
                 const radius = 500; // 500m
+                const categorySelect = document.getElementById('categorySelect');
+                const selectedCategory = categorySelect.value; // 선택된 카테고리
                 const cafeData = await callKakaoAPI('keyword', {
-                    query: '카페',
+                    query: selectedCategory,
                     x: baseX,
                     y: baseY,
                     radius: radius,
@@ -1383,21 +1431,15 @@
                     const batchResults = await Promise.all(
                         batch.map(async (cafe) => {
                             try {
-                                const [keywords, summary] = await Promise.all([
-                                    extractCafeKeywords(
-                                        cafe.name,
-                                        cafe.displayAddress || cafe.roadAddress || cafe.address
-                                    ),
-                                    extractCafeSummary(
-                                        cafe.name,
-                                        cafe.displayAddress || cafe.roadAddress || cafe.address
-                                    )
-                                ]);
-                                console.log(`키워드, 요약 추출 완료 [${cafe.name}]:`, keywords, summary);
-                                return { ...cafe, keywords: keywords || [], summary: summary || '' };
+                                const keywords = await extractCafeKeywords(
+                                    cafe.name,
+                                    cafe.displayAddress || cafe.roadAddress || cafe.address
+                                );
+                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
+                                return { ...cafe, keywords: keywords || [] };
                             } catch (error) {
-                                console.error('키워드/요약 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [], summary: '' };
+                                console.error('키워드 추출 실패:', cafe.name, error);
+                                return { ...cafe, keywords: [] };
                             }
                         })
                     );
@@ -1769,16 +1811,19 @@
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             resultsSection.style.display = 'none';
+            resultsHeader.textContent = ''; // 주소 후보 문구 제거
             cafeList.innerHTML = '';
 
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
 
-                // 카카오 API로 500m 반경 내 카페 검색 (반경 검색 지원)
+                // 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
                 const radius = 500;
+                const categorySelect = document.getElementById('categorySelect');
+                const selectedCategory = categorySelect.value; // 선택된 카테고리
                 const cafeData = await callKakaoAPI('keyword', {
-                    query: '카페',
+                    query: selectedCategory,
                     x: baseX,
                     y: baseY,
                     radius: radius,
@@ -1926,21 +1971,15 @@
                     const batchResults = await Promise.all(
                         batch.map(async (cafe) => {
                             try {
-                                const [keywords, summary] = await Promise.all([
-                                    extractCafeKeywords(
-                                        cafe.name,
-                                        cafe.displayAddress || cafe.roadAddress || cafe.address
-                                    ),
-                                    extractCafeSummary(
-                                        cafe.name,
-                                        cafe.displayAddress || cafe.roadAddress || cafe.address
-                                    )
-                                ]);
-                                console.log(`키워드, 요약 추출 완료 [${cafe.name}]:`, keywords, summary);
-                                return { ...cafe, keywords: keywords || [], summary: summary || '' };
+                                const keywords = await extractCafeKeywords(
+                                    cafe.name,
+                                    cafe.displayAddress || cafe.roadAddress || cafe.address
+                                );
+                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
+                                return { ...cafe, keywords: keywords || [] };
                             } catch (error) {
-                                console.error('키워드/요약 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [], summary: '' };
+                                console.error('키워드 추출 실패:', cafe.name, error);
+                                return { ...cafe, keywords: [] };
                             }
                         })
                     );
@@ -2089,6 +2128,20 @@
                     searchAddressCandidates(address);
                 }
             }
+        });
+
+        // 카테고리 선택 이벤트
+        const categorySelect = document.getElementById('categorySelect');
+        categorySelect.addEventListener('change', (e) => {
+            const selectedCategory = e.target.value;
+            if (selectedCategory === '마라탕') {
+                // 마라탕 선택 시 index2.html로 이동
+                window.location.href = 'index2.html';
+            } else if (selectedCategory === '빵') {
+                // 빵 선택 시 index3.html로 이동
+                window.location.href = 'index3.html';
+            }
+            // 카페 선택 시에는 현재 페이지 유지 (기본 동작)
         });
     </script>
 </body>
