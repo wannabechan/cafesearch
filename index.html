@@ -613,7 +613,7 @@
                 excludedNames: ['스타벅스', '이디야', '컴포즈', '메가', 'MGC', '카페베네', '투썸', '매머드', '커피앳웍스', '백억커피', '할리스', '커피빈', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스', '백미당', '파스쿠찌', '텐퍼센트커피', '폴바셋'],
                 excludedCategoryKeywords: ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'],
                 superpassKeywords: [],
-                searchMessage: '카카오 지도에서 카페 검색 중...',
+                searchMessage: '지도에서 카페 검색 중...',
                 hasSupplementLogic: false
             },
             '마라탕': {
@@ -621,7 +621,7 @@
                 excludedNames: [],
                 excludedCategoryKeywords: [],
                 superpassKeywords: ['마라', '마라탕', '마라샹궈', '샹궈', '마라면', '훠궈', '샤브샤브', 'malatang', '마라탕집', '마라샹궈집', '훠궈집'],
-                searchMessage: '카카오 지도에서 마라탕 매장 검색 중...',
+                searchMessage: '지도에서 마라탕 매장 검색 중...',
                 hasSupplementLogic: false
             },
             '빵': {
@@ -629,7 +629,7 @@
                 excludedNames: [],
                 excludedCategoryKeywords: [],
                 superpassKeywords: ['뚜레쥬르', '아티제', '던킨', '도너츠', '파리바게트', '파리크라상', '제과', '제빵', '베이커리'],
-                searchMessage: '카카오 지도에서 빵집 검색 중...',
+                searchMessage: '지도에서 빵집 검색 중...',
                 hasSupplementLogic: false
             },
             '국밥': {
@@ -637,7 +637,7 @@
                 excludedNames: [],
                 excludedCategoryKeywords: [],
                 superpassKeywords: ['순대국', '설렁탕', '곰탕', '국밥', '순댓국', '설렁탕집', '곰탕집', '해장국', '해장국집', '뼈해장국', '콩나물해장국', '시레기해장국', '선지해장국', '따로국밥', '감자탕', '감자탕집', '뼈감자탕', '감자탕국밥', '해장', '육개장', '육게장'],
-                searchMessage: '카카오 지도에서 국밥 매장 검색 중...',
+                searchMessage: '지도에서 국밥 매장 검색 중...',
                 hasSupplementLogic: true
             },
             '김밥': {
@@ -645,7 +645,7 @@
                 excludedNames: [],
                 excludedCategoryKeywords: [],
                 superpassKeywords: ['김밥', '김밥집', '분식', 'kimbap'],
-                searchMessage: '카카오 지도에서 김밥 집 검색 중...',
+                searchMessage: '지도에서 김밥 집 검색 중...',
                 hasSupplementLogic: false
             }
         };
@@ -1370,7 +1370,7 @@
             }
             
             // 검증 단계: 카카오 검색 결과를 네이버 검색으로 검증 (네이버맵에서 검색 가능한지 확인)
-            updateProgress(70, '네이버 지도에서 검색 확인 중...');
+            updateProgress(70, '지도에서 검색 확인 중...');
             const result = await processNaverSearchAndFilter(placesFilteredByDistance, false); // 카카오 검색 결과이므로 정상 검증
             console.log('최종 검증 후 결과:', Array.isArray(result) ? result.length : (result.placesSearchable?.length || 0), '개');
             
@@ -1800,7 +1800,7 @@
                 
                 // 프로그레스 업데이트 (70% ~ 95%)
                 const progressPercent = 70 + Math.floor((currentBatch / totalBatches) * 25);
-                updateProgress(progressPercent, `네이버 지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
+                updateProgress(progressPercent, `지도에서 검색 확인 중... (${currentBatch}/${totalBatches})`);
                 
                 const batchResults = await Promise.all(
                     batch.map(async (place) => {
