@@ -573,6 +573,7 @@
                         <option value="마라탕" selected>마라탕</option>
                         <option value="카페">카페</option>
                         <option value="빵">빵</option>
+                        <option value="국밥">국밥</option>
                     </select>
                 </div>
             </div>
@@ -595,6 +596,9 @@
     <script>
         // 제외할 프랜차이즈 마라탕 목록 (필요시 추가)
         const EXCLUDED_MARATANGS = [];
+
+        // 마라탕 관련 키워드
+        const MARATANG_KEYWORDS = ['마라', '마라탕', '마라샹궈', '샹궈', '마라면', '훠궈', '샤브샤브', 'malatang', '마라탕집', '마라샹궈집', '훠궈집'];
 
         // API 엔드포인트 (서버리스 함수 사용)
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -691,6 +695,15 @@
             if (!maratangName) return false;
             const name = maratangName.toLowerCase();
             return EXCLUDED_MARATANGS.some(excluded => name.includes(excluded.toLowerCase()));
+        }
+
+        // 매장명에 마라탕 관련 키워드가 포함되어 있는지 확인
+        function hasMaratangKeywordInName(maratangName) {
+            if (!maratangName) return false;
+            const name = maratangName.toLowerCase();
+            return MARATANG_KEYWORDS.some(keyword => 
+                name.includes(keyword.toLowerCase())
+            );
         }
 
         // 마라탕 카테고리인지 확인 (중식당, 한식, 일식, 양식 등 제외)
@@ -953,6 +966,190 @@
             return keywords;
         }
 
+        // 카카오 API로 마라탕 매장 검색
+        async function searchMaratangsFromKakaoAPI(baseX, baseY, radius = 500) {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedCategory = categorySelect.value;
+            
+            const cafeData = await callKakaoAPI('keyword', {
+                query: selectedCategory,
+                x: baseX,
+                y: baseY,
+                radius: radius,
+                size: 15
+            });
+            
+            return cafeData.documents || [];
+        }
+
+        // 마라탕 매장 결과 처리 및 필터링
+        function processMaratangResults(documents, baseX, baseY) {
+            return documents
+                .filter(doc => {
+                    const categoryName = doc.category_name || '';
+                    if (!isMaratangCategory(categoryName)) {
+                        return false;
+                    }
+                    const maratangName = doc.place_name || '';
+                    return !isExcludedMaratang(maratangName);
+                })
+                .map(doc => {
+                    const cafeX = parseFloat(doc.x);
+                    const cafeY = parseFloat(doc.y);
+                    const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
+                    
+                    const roadAddr = (doc.road_address && doc.road_address.address_name) 
+                        ? doc.road_address.address_name 
+                        : '';
+                    const addr = doc.address_name || '';
+                    const placeName = doc.place_name || '';
+                    const floorInfo = extractFloorInfo(placeName);
+                    
+                    return {
+                        name: placeName,
+                        address: addr,
+                        roadAddress: roadAddr,
+                        displayAddress: roadAddr || addr,
+                        floor: floorInfo,
+                        x: cafeX,
+                        y: cafeY,
+                        distance: distance,
+                        categoryName: doc.category_name || '',
+                        doc: doc
+                    };
+                })
+                .filter(cafe => cafe.distance <= 500)
+                .sort((a, b) => a.distance - b.distance);
+        }
+
+        // 주소 재조회 공통 함수
+        async function enrichCafesWithAddress(cafes) {
+            return Promise.all(cafes.map(async (cafe) => {
+                if (!cafe.roadAddress && cafe.x && cafe.y) {
+                    try {
+                        const coordData = await callKakaoAPI('coord2address', {
+                            x: cafe.x,
+                            y: cafe.y
+                        });
+                        
+                        if (coordData.documents?.length > 0) {
+                            const doc = coordData.documents[0];
+                            const roadAddr = (doc.road_address && doc.road_address.address_name) 
+                                ? doc.road_address.address_name 
+                                : '';
+                            if (roadAddr) {
+                                cafe.roadAddress = roadAddr;
+                                cafe.displayAddress = roadAddr;
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('주소 재조회 실패:', cafe.name, error);
+                    }
+                }
+                return cafe;
+            }));
+        }
+
+        // 네이버 검색 및 필터링 공통 함수
+        async function processNaverSearchAndFilter(cafesWithAddress) {
+            const cafesSearchable = [];
+            const batchSize = 5;
+            
+            for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
+                const batch = cafesWithAddress.slice(i, i + batchSize);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (cafe) => {
+                        try {
+                            const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
+                            
+                            if (isSearchable) {
+                                if (floorInfo) {
+                                    cafe.floor = floorInfo;
+                                }
+                                console.log(`네이버 검색 가능 및 카테고리 "마라탕" 확인 완료 [${cafe.name}]`);
+                                return cafe;
+                            } else {
+                                console.log(`네이버 검색 불가능 또는 카테고리가 "마라탕"이 아님 - 리스팅 제외 [${cafe.name}]`);
+                                return null;
+                            }
+                        } catch (error) {
+                            console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
+                            console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
+                            return null;
+                        }
+                    })
+                );
+                
+                for (const result of batchResults) {
+                    if (result) {
+                        cafesSearchable.push(result);
+                    }
+                }
+                
+                if (i + batchSize < cafesWithAddress.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            return cafesSearchable;
+        }
+
+        // 키워드 추출 공통 함수
+        async function processKeywords(cafesSearchable) {
+            const cafesWithKeywords = [];
+            const keywordBatchSize = 5;
+            
+            for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
+                const batch = cafesSearchable.slice(i, i + keywordBatchSize);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (cafe) => {
+                        try {
+                            const keywords = await extractCafeKeywords(
+                                cafe.name,
+                                cafe.displayAddress || cafe.roadAddress || cafe.address
+                            );
+                            console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
+                            return { ...cafe, keywords: keywords || [] };
+                        } catch (error) {
+                            console.error('키워드 추출 실패:', cafe.name, error);
+                            return { ...cafe, keywords: [] };
+                        }
+                    })
+                );
+                
+                cafesWithKeywords.push(...batchResults);
+                
+                if (i + keywordBatchSize < cafesSearchable.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            return cafesWithKeywords;
+        }
+
+        // 마라탕 검색 및 처리 공통 함수 (중복 제거)
+        async function searchAndProcessMaratangs(baseX, baseY, radius = 500) {
+            const allResults = await searchMaratangsFromKakaoAPI(baseX, baseY, radius);
+            
+            if (allResults.length === 0) {
+                return [];
+            }
+            
+            const cafes = processMaratangResults(allResults, baseX, baseY);
+            
+            if (cafes.length === 0) {
+                return [];
+            }
+            
+            const cafesWithAddress = await enrichCafesWithAddress(cafes);
+            const cafesSearchable = await processNaverSearchAndFilter(cafesWithAddress);
+            const cafesWithKeywords = await processKeywords(cafesSearchable);
+            
+            return cafesWithKeywords;
+        }
+
         // 마라탕 검색
         async function searchCafes(address) {
             const loadingEl = document.getElementById('loading');
@@ -979,195 +1176,19 @@
                 }
 
                 const location = addressData.documents[0];
-                const baseX = parseFloat(location.x); // 경도
-                const baseY = parseFloat(location.y); // 위도
-
-                // 2단계: 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
-                const radius = 500; // 500m
-                const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                const cafeData = await callKakaoAPI('keyword', {
-                    query: selectedCategory,
-                    x: baseX,
-                    y: baseY,
-                    radius: radius,
-                    size: 15
-                });
-
-                if (!cafeData.documents || cafeData.documents.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-
-                // 3단계: 마라탕 카테고리 필터링, 프랜차이즈 제외 및 거리 계산
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        // 카테고리 필터링: 마라탕만 허용
-                        const categoryName = doc.category_name || '';
-                        if (!isMaratangCategory(categoryName)) {
-                            return false;
-                        }
-                        // 프랜차이즈 제외
-                        const maratangName = doc.place_name || '';
-                        return !isExcludedMaratang(maratangName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조: road_address 객체 안에 address_name이 있음
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500) // 500m 이내만
-                    .sort((a, b) => a.distance - b.distance); // 거리순 정렬
-
-                if (cafes.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-
-                // 도로명 주소가 없는 마라탕 매장들의 좌표로 주소 재조회 및 층 정보 가져오기
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    // 층 정보가 없으면 네이버 검색 API로 층 정보 가져오기
-                    if (!cafe.floor) {
-                        try {
-                            const searchQuery = cafe.displayAddress || cafe.roadAddress || cafe.address
-                                ? `${cafe.name} ${(cafe.displayAddress || cafe.roadAddress || cafe.address).split(' ').slice(0, 2).join(' ')}`
-                                : cafe.name;
-                            
-                            const naverResult = await callNaverAPI('local', {
-                                query: searchQuery,
-                                display: 1,
-                                sort: 'random'
-                            });
-                            
-                            if (naverResult.items && naverResult.items.length > 0) {
-                                const item = naverResult.items[0];
-                                const title = (item.title || '').replace(/<[^>]*>/g, '');
-                                const address = (item.address || '').replace(/<[^>]*>/g, '');
-                                const roadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
-                                
-                                // 제목, 주소에서 층 정보 추출
-                                const floorFromTitle = extractFloorInfo(title);
-                                const floorFromAddress = extractFloorInfo(address + ' ' + roadAddress);
-                                cafe.floor = floorFromTitle || floorFromAddress || '';
-                            }
-                        } catch (error) {
-                            console.warn('층 정보 조회 실패:', cafe.name, error);
-                            cafe.floor = cafe.floor || '';
-                        }
-                    }
-                    
-                    return cafe;
-                }));
-
-                // 네이버 검색 가능 여부 확인 및 카테고리 확인 (마라탕만 필터링)
-                const cafesSearchable = [];
-                for (let i = 0; i < cafesWithAddress.length; i++) {
-                    const cafe = cafesWithAddress[i];
-                    // API 호출 제한을 위해 약간의 지연 추가 (초당 5개 제한 고려)
-                    if (i > 0 && i % 5 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                    
-                    try {
-                        const { isSearchable } = await getNaverSearchInfo(cafe);
-                        if (isSearchable) {
-                            cafesSearchable.push(cafe);
-                            console.log(`네이버 검색 가능 및 카테고리 "마라탕" 확인 완료 [${cafe.name}]`);
-                        } else {
-                            console.log(`네이버 검색 불가능 또는 카테고리가 "마라탕"이 아님 - 리스팅 제외 [${cafe.name}]`);
-                        }
-                    } catch (error) {
-                        console.warn('네이버 검색 가능 여부 확인 실패:', cafe.name, error);
-                        // 에러 발생 시 검색 가능한 것으로 간주하지 않음 (카테고리 확인 실패 시 제외)
-                        console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                    }
-                }
-
-                // 각 마라탕 매장에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
+                const baseX = parseFloat(location.x);
+                const baseY = parseFloat(location.y);
+                const radius = 500;
                 
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractCafeKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
+                const cafesWithKeywords = await searchAndProcessMaratangs(baseX, baseY, radius);
+
+                if (cafesWithKeywords.length === 0) {
+                    loadingEl.style.display = 'none';
+                    showNoResults();
+                    return;
                 }
 
-                // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
-
-                // 마라탕 목록 표시 (공통 함수 사용)
                 renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
@@ -1195,6 +1216,43 @@
         // 네이버 검색 결과 가져오기 (층 정보, 검색 가능 여부, 카테고리 확인 통합)
         async function getNaverSearchInfo(cafe) {
             try {
+                // 매장명에 마라탕 관련 키워드가 포함된 경우 필터링 우회
+                if (hasMaratangKeywordInName(cafe.name)) {
+                    console.log('매장명에 마라탕 관련 키워드 포함 - 네이버 검색 필터링 우회:', cafe.name);
+                    let floorInfo = cafe.floor || '';
+                    
+                    // 층 정보가 없으면 네이버 검색으로 조회 시도
+                    if (!floorInfo) {
+                        try {
+                            const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+                            const searchQuery = address
+                                ? `${cafe.name} ${address.split(' ').slice(0, 2).join(' ')}`
+                                : cafe.name;
+                            
+                            const naverResult = await callNaverAPI('local', {
+                                query: searchQuery,
+                                display: 1,
+                                sort: 'random'
+                            });
+                            
+                            if (naverResult.items?.length > 0) {
+                                const item = naverResult.items[0];
+                                const title = (item.title || '').replace(/<[^>]*>/g, '');
+                                const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
+                                const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
+                                
+                                const floorFromTitle = extractFloorInfo(title);
+                                const floorFromAddress = extractFloorInfo(resultAddress + ' ' + resultRoadAddress);
+                                floorInfo = floorFromTitle || floorFromAddress || '';
+                            }
+                        } catch (error) {
+                            console.warn('마라탕 키워드 매장 층 정보 조회 실패:', cafe.name, error);
+                        }
+                    }
+                    
+                    return { isSearchable: true, floorInfo };
+                }
+
                 const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
                 
                 // 1차 검색: 매장명칭 + 주소
@@ -1293,49 +1351,53 @@
             // 도로명 주소 우선, 없으면 지번 주소 사용
             const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
             
-            // 1차 검색: 매장명칭 + 주소
-            let searchQueryWithAddress = cafe.name;
+            // 주소가 있으면 항상 주소와 함께 검색, 없으면 매장명만 검색
             if (address) {
                 // 주소의 핵심 부분만 사용 (예: "서울시 강남구 테헤란로 152" -> "강남구 테헤란로 152")
                 const addressParts = address.split(' ');
                 // 시/도 제거하고 구/동/로/길 포함
                 const simplifiedAddress = addressParts.slice(1).join(' ') || address;
-                searchQueryWithAddress = `${cafe.name} ${simplifiedAddress}`;
-            }
-            
-            // 네이버 검색 API로 1차 검색 결과 확인
-            try {
-                const searchResult = await callNaverAPI('local', {
-                    query: searchQueryWithAddress,
-                    display: 5,
-                    sort: 'random'
-                });
+                const searchQueryWithAddress = `${cafe.name} ${simplifiedAddress}`;
                 
-                // 검색 결과가 있고, 첫 번째 결과의 이름이 카페 이름과 유사한지 확인
-                let searchSuccess = false;
-                if (searchResult.items && searchResult.items.length > 0) {
-                    const firstResult = searchResult.items[0];
-                    const resultTitle = (firstResult.title || '').replace(/<[^>]*>/g, '');
-                    // 마라탕 이름이 검색 결과 제목에 포함되어 있는지 확인
-                    if (resultTitle.includes(cafe.name) || cafe.name.includes(resultTitle.split(' ')[0])) {
-                        searchSuccess = true;
+                // 네이버 검색 API로 검색 결과 확인
+                try {
+                    const searchResult = await callNaverAPI('local', {
+                        query: searchQueryWithAddress,
+                        display: 5,
+                        sort: 'random'
+                    });
+                    
+                    // 검색 결과가 있고, 첫 번째 결과의 이름이 마라탕 이름과 유사한지 확인
+                    let searchSuccess = false;
+                    if (searchResult.items && searchResult.items.length > 0) {
+                        const firstResult = searchResult.items[0];
+                        const resultTitle = (firstResult.title || '').replace(/<[^>]*>/g, '');
+                        // 마라탕 이름이 검색 결과 제목에 포함되어 있는지 확인
+                        if (resultTitle.includes(cafe.name) || cafe.name.includes(resultTitle.split(' ')[0])) {
+                            searchSuccess = true;
+                        }
                     }
-                }
-                
-                if (searchSuccess) {
-                    // 1차 검색 성공: 매장명칭 + 주소로 네이버맵 열기
+                    
+                    if (searchSuccess) {
+                        // 검색 성공: 매장명칭 + 주소로 네이버맵 열기
+                        const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
+                        window.open(urlWithAddress, '_blank');
+                    } else {
+                        // 검색 실패해도 주소와 함께 검색 (네이버맵이 더 정확하게 찾을 수 있음)
+                        const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
+                        window.open(urlWithAddress, '_blank');
+                    }
+                } catch (error) {
+                    // API 호출 실패 시에도 주소와 함께 검색
+                    console.warn('네이버 검색 API 호출 실패, 주소와 함께 검색으로 진행:', error);
+                    const searchQueryWithAddress = `${cafe.name} ${addressParts.slice(1).join(' ') || address}`;
                     const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
                     window.open(urlWithAddress, '_blank');
-                } else {
-                    // 1차 검색 실패: 매장명칭만으로 네이버맵 열기
-                    const urlNameOnly = `https://map.naver.com/v5/search/${encodeURIComponent(cafe.name)}`;
-                    window.open(urlNameOnly, '_blank');
                 }
-            } catch (error) {
-                // API 호출 실패 시에도 1차 검색(매장명칭 + 주소) 시도
-                console.warn('네이버 검색 API 호출 실패, 1차 검색으로 진행:', error);
-                const urlWithAddress = `https://map.naver.com/v5/search/${encodeURIComponent(searchQueryWithAddress)}`;
-                window.open(urlWithAddress, '_blank');
+            } else {
+                // 주소가 없으면 매장명만으로 검색
+                const urlNameOnly = `https://map.naver.com/v5/search/${encodeURIComponent(cafe.name)}`;
+                window.open(urlNameOnly, '_blank');
             }
         }
 
@@ -1529,185 +1591,17 @@
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
-
-                // 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
                 const radius = 500;
-                const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                const cafeData = await callKakaoAPI('keyword', {
-                    query: selectedCategory,
-                    x: baseX,
-                    y: baseY,
-                    radius: radius,
-                    size: 15
-                });
+                
+                const cafesWithKeywords = await searchAndProcessMaratangs(baseX, baseY, radius);
 
-                if (!cafeData.documents || cafeData.documents.length === 0) {
+                if (cafesWithKeywords.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
 
-                // 마라탕 카테고리 필터링, 프랜차이즈 제외 및 거리 계산
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        // 카테고리 필터링: 마라탕만 허용
-                        const categoryName = doc.category_name || '';
-                        if (!isMaratangCategory(categoryName)) {
-                            return false;
-                        }
-                        // 프랜차이즈 제외
-                        const maratangName = doc.place_name || '';
-                        return !isExcludedMaratang(maratangName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500)
-                    .sort((a, b) => a.distance - b.distance);
-
-                if (cafes.length === 0) {
-                    loadingEl.style.display = 'none';
-                    showNoResults();
-                    return;
-                }
-
-                // 도로명 주소가 없는 카페들의 좌표로 주소 재조회
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    return cafe;
-                }));
-
-                // 네이버 검색 정보 조회 및 필터링 (층 정보 + 검색 가능 여부 + 카테고리 확인 통합)
-                // 배치 처리로 성능 개선 (5개씩 묶어서 병렬 처리)
-                const cafesSearchable = [];
-                const batchSize = 5;
-                
-                for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
-                    const batch = cafesWithAddress.slice(i, i + batchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
-                                
-                                if (isSearchable) {
-                                    // 층 정보 업데이트
-                                    if (floorInfo) {
-                                        cafe.floor = floorInfo;
-                                    }
-                                    console.log(`네이버 검색 가능 및 카테고리 "마라탕" 확인 완료 [${cafe.name}]`);
-                                    return cafe;
-                                } else {
-                                    console.log(`네이버 검색 불가능 또는 카테고리가 "마라탕"이 아님 - 리스팅 제외 [${cafe.name}]`);
-                                    return null;
-                                }
-                            } catch (error) {
-                                console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
-                                console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                                return null;
-                            }
-                        })
-                    );
-                    
-                    // null이 아닌 결과만 추가 (성능 최적화: for...of 사용)
-                    for (const result of batchResults) {
-                        if (result) {
-                            cafesSearchable.push(result);
-                        }
-                    }
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + batchSize < cafesWithAddress.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
-
-                // 각 마라탕 매장에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
-                
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractCafeKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
-
-                // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
-
-                // 마라탕 목록 표시 (공통 함수 사용)
                 renderCafeList(cafesWithKeywords, resultsHeader, resultsSection, cafeList);
 
             } catch (error) {
@@ -1886,6 +1780,9 @@
             } else if (selectedCategory === '빵') {
                 // 빵 선택 시 index3.html로 이동
                 window.location.href = 'index3.html';
+            } else if (selectedCategory === '국밥') {
+                // 국밥 선택 시 index4.html로 이동
+                window.location.href = 'index4.html';
             }
             // 마라탕 선택 시에는 현재 페이지 유지 (기본 동작)
         });

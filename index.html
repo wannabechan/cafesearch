@@ -573,6 +573,7 @@
                         <option value="카페" selected>카페</option>
                         <option value="마라탕">마라탕</option>
                         <option value="빵">빵</option>
+                        <option value="국밥">국밥</option>
                     </select>
                 </div>
             </div>
@@ -2178,6 +2179,9 @@
             } else if (selectedCategory === '빵') {
                 // 빵 선택 시 index3.html로 이동
                 window.location.href = 'index3.html';
+            } else if (selectedCategory === '국밥') {
+                // 국밥 선택 시 index4.html로 이동
+                window.location.href = 'index4.html';
             }
             // 카페 선택 시에는 현재 페이지 유지 (기본 동작)
         });
