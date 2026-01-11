@@ -1559,6 +1559,7 @@
             resultsSection.style.display = 'none';
             restaurantList.innerHTML = '';
             resultsHeader.textContent = '';
+            updateProgress(0, '현위치 확인 중...');
             
             try {
                 if (!navigator.geolocation) {

@@ -1673,6 +1673,7 @@
             resultsSection.style.display = 'none';
             cafeList.innerHTML = '';
             resultsHeader.textContent = '';
+            updateProgress(0, '현위치 확인 중...');
             
             try {
                 // Geolocation API로 현재 위치 가져오기
