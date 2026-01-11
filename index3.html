@@ -367,8 +367,8 @@
             }
 
             .search-buttons {
-                flex-direction: column;
-                gap: 10px;
+                flex-direction: row;
+                gap: 8px;
             }
 
             .category-select {
@@ -383,23 +383,24 @@
                 border-radius: 20px;
             }
 
-            .search-buttons {
-                flex-direction: column;
-                gap: 10px;
-            }
-
             .search-button {
-                padding: 14px 24px;
-                font-size: 16px;
+                flex: 1;
+                padding: 12px 16px;
+                font-size: 14px;
                 border-radius: 20px;
-                width: 100%;
+                min-width: 0;
             }
 
             .location-button {
-                padding: 14px 18px;
-                font-size: 20px;
+                padding: 12px 14px;
+                font-size: 18px;
                 border-radius: 20px;
-                width: 100%;
+                flex: 0 0 auto;
+            }
+            
+            .category-select {
+                flex: 0 0 auto;
+                min-width: 70px;
             }
 
             .cafe-item {
@@ -491,17 +492,20 @@
             }
 
             .search-button {
-                padding: 12px 20px;
+                padding: 12px 14px;
+                font-size: 13px;
             }
 
             .location-button {
-                padding: 12px 16px;
+                padding: 12px 12px;
+                font-size: 16px;
             }
 
             .category-select {
-                padding: 12px 14px;
-                font-size: 14px;
-                padding-right: 32px;
+                padding: 12px 12px;
+                font-size: 13px;
+                padding-right: 28px;
+                min-width: 65px;
             }
 
             .cafe-item {
@@ -1068,47 +1072,37 @@
                 }
 
                 // 3단계: 빵집 카테고리 필터링, 제외 목록 제외 및 거리 계산
+                // '빵집' 또는 '베이커리'로 검색한 결과는 기본적으로 빵집으로 간주하고, 명확히 제외할 카테고리만 제외
                 const cafes = cafeData.documents
                     .filter(doc => {
-                        // 카테고리 필터링: 베이커리/빵집만 허용 (더 완화된 필터링)
                         const categoryName = doc.category_name || '';
                         const bakeryName = doc.place_name || '';
+                        const category = categoryName.toLowerCase();
+                        const name = bakeryName.toLowerCase();
                         
-                        // 카테고리에서 베이커리/빵집 확인
-                        const categoryHasBakery = isBakeryCategory(categoryName);
+                        // 명확히 제외할 카테고리만 체크 (레스토랑, 음식점, 술집 등)
+                        const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
+                        const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
                         
-                        // 매장명에서 베이커리/빵집 키워드 확인 (대중적인 빵 메뉴 이름 포함)
-                        const bakeryKeywords = [
-                            // 기본 키워드
-                            '베이커리', 'bakery', '빵집', '제과', '제빵', '파티스리', 'patisserie',
-                            // 대중적인 빵 메뉴
-                            '소보로', '단팥빵', '팥빵', '크림빵', '식빵', '호밀빵', '통밀빵', '사워도우',
-                            '바게트', 'baguette', '크루아상', 'croissant', '베이글', 'bagel', '브리오슈', 'brioche',
-                            '치아바타', 'ciabatta', '도넛', 'donut', '머핀', 'muffin', '쿠키', 'cookie',
-                            '브라우니', 'brownie', '케이크', 'cake', '마카롱', 'macaron', '타르트', 'tart',
-                            '파운드케이크', 'poundcake', '티라미수', 'tiramisu', '초콜릿', 'chocolate',
-                            '와플', 'waffle', '팬케이크', 'pancake', '토스트', 'toast', '샌드위치', 'sandwich',
-                            '크로와상', '크로아상', '에클레어', 'eclair', '슈크림', '쇼콜라', '초콜렛',
-                            '롤케이크', '롤케익', '롤빵', '스콘', 'scone',
-                            // 대형 프랜차이즈 베이커리
-                            '뚜레쥬르', 'tous', '파리바게뜨', 'paris', '던킨', 'dunkin', '크리스피', 'krispy',
-                            '베스킨', 'baskin', '하겐다즈', 'haagen', '31', '도넛', 'donut'
-                        ];
-                        const nameHasBakery = bakeryKeywords.some(keyword => 
-                            bakeryName.toLowerCase().includes(keyword.toLowerCase())
-                        );
-                        
-                        // 카테고리에 '카페'가 있어도, 카테고리나 매장명에 베이커리/빵집 키워드가 있으면 포함
-                        // 또는 카테고리가 비어있고 매장명에 키워드가 있으면 포함
-                        const shouldInclude = categoryHasBakery || nameHasBakery;
-                        
-                        if (!shouldInclude) {
-                            // 디버깅: 필터링된 항목 로그
-                            console.log('필터링 제외:', {
+                        // 제외 카테고리가 있으면 제외
+                        if (isExcluded) {
+                            console.log('필터링 제외 (제외 카테고리):', {
                                 name: bakeryName,
-                                category: categoryName,
-                                categoryHasBakery,
-                                nameHasBakery
+                                category: categoryName
+                            });
+                            return false;
+                        }
+                        
+                        // '빵집' 또는 '베이커리'로 검색한 결과이므로, 제외 카테고리가 없으면 기본적으로 포함
+                        // (카테고리가 '카페'만 있어도 '빵집'/'베이커리'로 검색했으므로 포함)
+                        // 단, 매장명에 명확히 다른 업종 키워드가 있으면 제외
+                        const otherBusinessKeywords = ['치킨집', '피자집', '한식당', '중식당', '일식당', '양식당', '술집', '바', 'pub', 'restaurant'];
+                        const hasOtherBusiness = otherBusinessKeywords.some(keyword => name.includes(keyword));
+                        
+                        if (hasOtherBusiness) {
+                            console.log('필터링 제외 (다른 업종 키워드):', {
+                                name: bakeryName,
+                                category: categoryName
                             });
                             return false;
                         }
@@ -1732,47 +1726,37 @@
                 }
 
                 // 빵집 카테고리 필터링, 제외 목록 제외 및 거리 계산
+                // '빵집' 또는 '베이커리'로 검색한 결과는 기본적으로 빵집으로 간주하고, 명확히 제외할 카테고리만 제외
                 const cafes = cafeData.documents
                     .filter(doc => {
-                        // 카테고리 필터링: 베이커리/빵집만 허용 (더 완화된 필터링)
                         const categoryName = doc.category_name || '';
                         const bakeryName = doc.place_name || '';
+                        const category = categoryName.toLowerCase();
+                        const name = bakeryName.toLowerCase();
                         
-                        // 카테고리에서 베이커리/빵집 확인
-                        const categoryHasBakery = isBakeryCategory(categoryName);
+                        // 명확히 제외할 카테고리만 체크 (레스토랑, 음식점, 술집 등)
+                        const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
+                        const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
                         
-                        // 매장명에서 베이커리/빵집 키워드 확인 (대중적인 빵 메뉴 이름 포함)
-                        const bakeryKeywords = [
-                            // 기본 키워드
-                            '베이커리', 'bakery', '빵집', '제과', '제빵', '파티스리', 'patisserie',
-                            // 대중적인 빵 메뉴
-                            '소보로', '단팥빵', '팥빵', '크림빵', '식빵', '호밀빵', '통밀빵', '사워도우',
-                            '바게트', 'baguette', '크루아상', 'croissant', '베이글', 'bagel', '브리오슈', 'brioche',
-                            '치아바타', 'ciabatta', '도넛', 'donut', '머핀', 'muffin', '쿠키', 'cookie',
-                            '브라우니', 'brownie', '케이크', 'cake', '마카롱', 'macaron', '타르트', 'tart',
-                            '파운드케이크', 'poundcake', '티라미수', 'tiramisu', '초콜릿', 'chocolate',
-                            '와플', 'waffle', '팬케이크', 'pancake', '토스트', 'toast', '샌드위치', 'sandwich',
-                            '크로와상', '크로아상', '에클레어', 'eclair', '슈크림', '쇼콜라', '초콜렛',
-                            '롤케이크', '롤케익', '롤빵', '스콘', 'scone',
-                            // 대형 프랜차이즈 베이커리
-                            '뚜레쥬르', 'tous', '파리바게뜨', 'paris', '던킨', 'dunkin', '크리스피', 'krispy',
-                            '베스킨', 'baskin', '하겐다즈', 'haagen', '31', '도넛', 'donut'
-                        ];
-                        const nameHasBakery = bakeryKeywords.some(keyword => 
-                            bakeryName.toLowerCase().includes(keyword.toLowerCase())
-                        );
-                        
-                        // 카테고리에 '카페'가 있어도, 카테고리나 매장명에 베이커리/빵집 키워드가 있으면 포함
-                        // 또는 카테고리가 비어있고 매장명에 키워드가 있으면 포함
-                        const shouldInclude = categoryHasBakery || nameHasBakery;
-                        
-                        if (!shouldInclude) {
-                            // 디버깅: 필터링된 항목 로그
-                            console.log('필터링 제외 (좌표 검색):', {
+                        // 제외 카테고리가 있으면 제외
+                        if (isExcluded) {
+                            console.log('필터링 제외 (제외 카테고리, 좌표 검색):', {
                                 name: bakeryName,
-                                category: categoryName,
-                                categoryHasBakery,
-                                nameHasBakery
+                                category: categoryName
+                            });
+                            return false;
+                        }
+                        
+                        // '빵집' 또는 '베이커리'로 검색한 결과이므로, 제외 카테고리가 없으면 기본적으로 포함
+                        // (카테고리가 '카페'만 있어도 '빵집'/'베이커리'로 검색했으므로 포함)
+                        // 단, 매장명에 명확히 다른 업종 키워드가 있으면 제외
+                        const otherBusinessKeywords = ['치킨집', '피자집', '한식당', '중식당', '일식당', '양식당', '술집', '바', 'pub', 'restaurant'];
+                        const hasOtherBusiness = otherBusinessKeywords.some(keyword => name.includes(keyword));
+                        
+                        if (hasOtherBusiness) {
+                            console.log('필터링 제외 (다른 업종 키워드, 좌표 검색):', {
+                                name: bakeryName,
+                                category: categoryName
                             });
                             return false;
                         }
@@ -1985,6 +1969,7 @@
                 const longitude = position.coords.longitude;
                 
                 // 좌표를 주소로 변환
+                let address = '';
                 try {
                     const coordData = await callKakaoAPI('coord2address', {
                         x: longitude,
@@ -1997,26 +1982,24 @@
                             ? doc.road_address.address_name 
                             : '';
                         const addr = doc.address_name || '';
-                        const address = roadAddr || addr;
-                        
-                        // 입력창에 주소 표시
-                        addressInput.value = address;
-                        
-                        // 해당 주소로 빵집 검색
-                        await searchCafesByCoordinates(longitude, latitude, address);
-                    } else {
-                        // 주소 변환 실패 시 좌표로 직접 검색
-                        const address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
-                        addressInput.value = address;
-                        await searchCafesByCoordinates(longitude, latitude, address);
+                        address = roadAddr || addr;
+                    }
+                    
+                    // 주소가 없으면 좌표 문자열 사용
+                    if (!address) {
+                        address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
                     }
                 } catch (error) {
                     console.warn('주소 변환 실패, 좌표로 직접 검색:', error);
-                    // 주소 변환 실패 시 좌표로 직접 검색
-                    const address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
-                    addressInput.value = address;
-                    await searchCafesByCoordinates(longitude, latitude, address);
+                    // 주소 변환 실패 시 좌표 문자열 사용
+                    address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
                 }
+                
+                // 항상 입력창에 주소 표시
+                addressInput.value = address;
+                
+                // 해당 주소로 빵집 검색
+                await searchCafesByCoordinates(longitude, latitude, address);
                 
             } catch (error) {
                 loadingEl.style.display = 'none';

@@ -367,8 +367,8 @@
             }
 
             .search-buttons {
-                flex-direction: column;
-                gap: 10px;
+                flex-direction: row;
+                gap: 8px;
             }
 
             .category-select {
@@ -383,23 +383,24 @@
                 border-radius: 20px;
             }
 
-            .search-buttons {
-                flex-direction: column;
-                gap: 10px;
-            }
-
             .search-button {
-                padding: 14px 24px;
-                font-size: 16px;
+                flex: 1;
+                padding: 12px 16px;
+                font-size: 14px;
                 border-radius: 20px;
-                width: 100%;
+                min-width: 0;
             }
 
             .location-button {
-                padding: 14px 18px;
-                font-size: 20px;
+                padding: 12px 14px;
+                font-size: 18px;
                 border-radius: 20px;
-                width: 100%;
+                flex: 0 0 auto;
+            }
+            
+            .category-select {
+                flex: 0 0 auto;
+                min-width: 70px;
             }
 
             .cafe-item {
@@ -491,17 +492,20 @@
             }
 
             .search-button {
-                padding: 12px 20px;
+                padding: 12px 14px;
+                font-size: 13px;
             }
 
             .location-button {
-                padding: 12px 16px;
+                padding: 12px 12px;
+                font-size: 16px;
             }
 
             .category-select {
-                padding: 12px 14px;
-                font-size: 14px;
-                padding-right: 32px;
+                padding: 12px 12px;
+                font-size: 13px;
+                padding-right: 28px;
+                min-width: 65px;
             }
 
             .cafe-item {
@@ -1761,6 +1765,7 @@
                 const longitude = position.coords.longitude;
                 
                 // 좌표를 주소로 변환
+                let address = '';
                 try {
                     const coordData = await callKakaoAPI('coord2address', {
                         x: longitude,
@@ -1773,26 +1778,24 @@
                             ? doc.road_address.address_name 
                             : '';
                         const addr = doc.address_name || '';
-                        const address = roadAddr || addr;
-                        
-                        // 입력창에 주소 표시
-                        addressInput.value = address;
-                        
-                        // 해당 주소로 마라탕 검색
-                        await searchCafesByCoordinates(longitude, latitude, address);
-                    } else {
-                        // 주소 변환 실패 시 좌표로 직접 검색
-                        const address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
-                        addressInput.value = address;
-                        await searchCafesByCoordinates(longitude, latitude, address);
+                        address = roadAddr || addr;
+                    }
+                    
+                    // 주소가 없으면 좌표 문자열 사용
+                    if (!address) {
+                        address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
                     }
                 } catch (error) {
                     console.warn('주소 변환 실패, 좌표로 직접 검색:', error);
-                    // 주소 변환 실패 시 좌표로 직접 검색
-                    const address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
-                    addressInput.value = address;
-                    await searchCafesByCoordinates(longitude, latitude, address);
+                    // 주소 변환 실패 시 좌표 문자열 사용
+                    address = `위도 ${latitude.toFixed(6)}, 경도 ${longitude.toFixed(6)}`;
                 }
+                
+                // 항상 입력창에 주소 표시
+                addressInput.value = address;
+                
+                // 해당 주소로 마라탕 검색
+                await searchCafesByCoordinates(longitude, latitude, address);
                 
             } catch (error) {
                 loadingEl.style.display = 'none';
