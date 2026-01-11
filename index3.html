@@ -595,6 +595,9 @@
     <script>
         // 제외할 빵집 목록
         const EXCLUDED_BAKERIES = []; // 빵집 제외 목록 (대형 프랜차이즈 베이커리 포함을 위해 빈 배열 유지)
+        
+        // 강제 포함할 빵집 키워드 (매장명에 이 단어가 포함되어 있으면 무조건 포함)
+        const FORCE_INCLUDE_KEYWORDS = ['뚜레쥬르', '아티제', '던킨', '도너츠', '파리바게트', '파리크라상'];
 
         // API 엔드포인트 (서버리스 함수 사용)
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -691,6 +694,275 @@
             if (!bakeryName) return false;
             const name = bakeryName.toLowerCase();
             return EXCLUDED_BAKERIES.some(excluded => name.includes(excluded.toLowerCase()));
+        }
+        
+        // 강제 포함할 빵집인지 확인 (매장명에 강제 포함 키워드가 있는지)
+        function isForceIncludedBakery(bakeryName) {
+            if (!bakeryName) return false;
+            const name = bakeryName.toLowerCase();
+            return FORCE_INCLUDE_KEYWORDS.some(keyword => name.includes(keyword.toLowerCase()));
+        }
+        
+        // 카카오 API로 빵집 검색 (공통 함수 - 중복 제거)
+        async function searchBakeriesFromKakaoAPI(baseX, baseY, radius = 500) {
+            const categorySelect = document.getElementById('categorySelect');
+            const selectedCategory = categorySelect.value;
+            
+            if (selectedCategory !== '빵') {
+                const cafeData = await callKakaoAPI('keyword', {
+                    query: selectedCategory,
+                    x: baseX,
+                    y: baseY,
+                    radius: radius,
+                    size: 15
+                });
+                return cafeData.documents || [];
+            }
+            
+            // '빵집'과 '베이커리' 병렬 검색
+            const [bakeryData, breadData] = await Promise.all([
+                callKakaoAPI('keyword', {
+                    query: '빵집',
+                    x: baseX,
+                    y: baseY,
+                    radius: radius,
+                    size: 15
+                }),
+                callKakaoAPI('keyword', {
+                    query: '베이커리',
+                    x: baseX,
+                    y: baseY,
+                    radius: radius,
+                    size: 15
+                })
+            ]);
+            
+            // 중복 제거를 위한 Set 사용
+            const seen = new Set();
+            const allDocs = [
+                ...(bakeryData.documents || []),
+                ...(breadData.documents || [])
+            ];
+            
+            let allResults = allDocs.filter(doc => {
+                const key = `${doc.place_name}|${doc.x}|${doc.y}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            
+            // 강제 포함 키워드로 추가 검색 (병렬 처리)
+            const forceIncludeSearches = await Promise.all(
+                FORCE_INCLUDE_KEYWORDS.map(keyword =>
+                    callKakaoAPI('keyword', {
+                        query: keyword,
+                        x: baseX,
+                        y: baseY,
+                        radius: radius,
+                        size: 15
+                    }).catch(err => {
+                        console.warn(`강제 포함 키워드 "${keyword}" 검색 실패:`, err);
+                        return { documents: [] };
+                    })
+                )
+            );
+            
+            // 강제 포함 키워드 검색 결과 추가
+            forceIncludeSearches.forEach((searchResult, index) => {
+                if (searchResult.documents?.length > 0) {
+                    const keyword = FORCE_INCLUDE_KEYWORDS[index];
+                    console.log(`강제 포함 키워드 "${keyword}" 검색 결과:`, searchResult.documents.length, '개');
+                    searchResult.documents.forEach(doc => {
+                        const key = `${doc.place_name}|${doc.x}|${doc.y}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            allResults.push(doc);
+                        }
+                    });
+                }
+            });
+            
+            // 카페로도 검색하여 강제 포함 키워드가 있는 매장 추가
+            try {
+                const cafeData = await callKakaoAPI('keyword', {
+                    query: '카페',
+                    x: baseX,
+                    y: baseY,
+                    radius: radius,
+                    size: 15
+                });
+                
+                if (cafeData.documents?.length > 0) {
+                    console.log(`카페 검색 결과:`, cafeData.documents.length, '개');
+                    
+                    // 카페 검색 결과 중 강제 포함 키워드가 있는 매장만 필터링
+                    const forceIncludedFromCafe = cafeData.documents.filter(doc => 
+                        isForceIncludedBakery(doc.place_name)
+                    );
+                    
+                    if (forceIncludedFromCafe.length > 0) {
+                        console.log(`카페 검색 결과 중 강제 포함 키워드 매장:`, forceIncludedFromCafe.length, '개', forceIncludedFromCafe.map(doc => doc.place_name));
+                        
+                        forceIncludedFromCafe.forEach(doc => {
+                            const key = `${doc.place_name}|${doc.x}|${doc.y}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                allResults.push(doc);
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('카페 검색 실패:', err);
+            }
+            
+            return allResults;
+        }
+        
+        // 빵집 결과 처리 및 필터링 (공통 함수 - 중복 제거)
+        function processBakeryResults(documents, baseX, baseY) {
+            // 필터링 제거: 모든 검색 결과 포함 (강제 포함 키워드 로그만 출력)
+            return documents
+                .map(doc => {
+                    const bakeryName = doc.place_name || '';
+                    
+                    // 강제 포함 키워드 로그만 출력 (필터링은 하지 않음)
+                    if (isForceIncludedBakery(bakeryName)) {
+                        console.log('강제 포함 (매장명에 강제 포함 키워드):', {
+                            name: bakeryName,
+                            keyword: FORCE_INCLUDE_KEYWORDS.find(keyword => bakeryName.toLowerCase().includes(keyword.toLowerCase()))
+                        });
+                    }
+                    
+                    const cafeX = parseFloat(doc.x);
+                    const cafeY = parseFloat(doc.y);
+                    const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
+                    
+                    const roadAddr = doc.road_address?.address_name || '';
+                    const addr = doc.address_name || '';
+                    const placeName = doc.place_name || '';
+                    const floorInfo = extractFloorInfo(placeName);
+                    
+                    return {
+                        name: placeName,
+                        address: addr,
+                        roadAddress: roadAddr,
+                        displayAddress: roadAddr || addr,
+                        floor: floorInfo,
+                        x: cafeX,
+                        y: cafeY,
+                        distance: distance,
+                        categoryName: doc.category_name || '',
+                        doc: doc
+                    };
+                })
+                .filter(cafe => cafe.distance <= 500)
+                .sort((a, b) => a.distance - b.distance);
+        }
+        
+        // 주소 재조회 공통 함수 (중복 제거)
+        async function enrichCafesWithAddress(cafes) {
+            return Promise.all(cafes.map(async (cafe) => {
+                // 도로명 주소가 없으면 좌표로 주소 조회
+                if (!cafe.roadAddress && cafe.x && cafe.y) {
+                    try {
+                        const coordData = await callKakaoAPI('coord2address', {
+                            x: cafe.x,
+                            y: cafe.y
+                        });
+                        
+                        if (coordData.documents?.length > 0) {
+                            const doc = coordData.documents[0];
+                            const roadAddr = doc.road_address?.address_name || '';
+                            if (roadAddr) {
+                                cafe.roadAddress = roadAddr;
+                                cafe.displayAddress = roadAddr;
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('주소 재조회 실패:', cafe.name, error);
+                    }
+                }
+                return cafe;
+            }));
+        }
+        
+        // 네이버 검색 정보 조회 및 키워드 추출 공통 함수 (중복 제거)
+        async function processNaverSearchAndKeywords(cafesWithAddress) {
+            // 네이버 검색 정보 조회 및 필터링 (배치 처리)
+            const cafesSearchable = [];
+            const batchSize = 5;
+            
+            for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
+                const batch = cafesWithAddress.slice(i, i + batchSize);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (cafe) => {
+                        try {
+                            const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
+                            
+                            if (isSearchable) {
+                                if (floorInfo) {
+                                    cafe.floor = floorInfo;
+                                }
+                                console.log(`네이버 검색 가능 및 카테고리 "베이커리/빵집" 확인 완료 [${cafe.name}]`);
+                                return cafe;
+                            } else {
+                                console.log(`네이버 검색 불가능 또는 카테고리가 "베이커리/빵집"이 아님 - 리스팅 제외 [${cafe.name}]`);
+                                return null;
+                            }
+                        } catch (error) {
+                            console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
+                            console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
+                            return null;
+                        }
+                    })
+                );
+                
+                for (const result of batchResults) {
+                    if (result) {
+                        cafesSearchable.push(result);
+                    }
+                }
+                
+                // 배치 간 지연 (API 제한 고려)
+                if (i + batchSize < cafesWithAddress.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            // 키워드 추출 (배치 처리)
+            const cafesWithKeywords = [];
+            const keywordBatchSize = 5;
+            
+            for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
+                const batch = cafesSearchable.slice(i, i + keywordBatchSize);
+                
+                const batchResults = await Promise.all(
+                    batch.map(async (cafe) => {
+                        try {
+                            const keywords = await extractBakeryKeywords(
+                                cafe.name,
+                                cafe.displayAddress || cafe.roadAddress || cafe.address
+                            );
+                            console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
+                            return { ...cafe, keywords: keywords || [] };
+                        } catch (error) {
+                            console.error('키워드 추출 실패:', cafe.name, error);
+                            return { ...cafe, keywords: [] };
+                        }
+                    })
+                );
+                
+                cafesWithKeywords.push(...batchResults);
+                
+                // 배치 간 지연 (API 제한 고려)
+                if (i + keywordBatchSize < cafesSearchable.length) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            }
+            
+            return cafesWithKeywords;
         }
 
         // 베이커리/빵집 카테고리인지 확인 (베이커리/빵집 관련 키워드가 있으면 허용, 카페도 포함 가능)
@@ -1002,149 +1274,49 @@
                 const baseX = parseFloat(location.x); // 경도
                 const baseY = parseFloat(location.y); // 위도
 
-                // 2단계: 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
-                const radius = 500; // 500m
-                const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                // '빵'으로 검색하면 결과가 적을 수 있으므로 '빵집'과 '베이커리' 모두 검색
-                let allResults = [];
-                if (selectedCategory === '빵') {
-                    // '빵집'과 '베이커리' 모두 검색하여 결과 합치기
-                    const [bakeryData, breadData] = await Promise.all([
-                        callKakaoAPI('keyword', {
-                            query: '빵집',
-                            x: baseX,
-                            y: baseY,
-                            radius: radius,
-                            size: 15
-                        }),
-                        callKakaoAPI('keyword', {
-                            query: '베이커리',
-                            x: baseX,
-                            y: baseY,
-                            radius: radius,
-                            size: 15
-                        })
-                    ]);
-                    
-                    // 중복 제거를 위한 Set 사용
-                    const seen = new Set();
-                    const allDocs = [
-                        ...(bakeryData.documents || []),
-                        ...(breadData.documents || [])
-                    ];
-                    
-                    allResults = allDocs.filter(doc => {
-                        const key = `${doc.place_name}|${doc.x}|${doc.y}`;
-                        if (seen.has(key)) return false;
-                        seen.add(key);
-                        return true;
-                    });
-                } else {
-                    const cafeData = await callKakaoAPI('keyword', {
-                        query: selectedCategory,
-                        x: baseX,
-                        y: baseY,
-                        radius: radius,
-                        size: 15
-                    });
-                    allResults = cafeData.documents || [];
-                }
-                
-                const cafeData = { documents: allResults };
+                // 2단계: 카카오 API로 500m 반경 내 장소 검색 (공통 함수 사용)
+                const radius = 500;
+                const allResults = await searchBakeriesFromKakaoAPI(baseX, baseY, radius);
                 
                 // 디버깅: 카카오 API 검색 결과 확인
+                const categorySelect = document.getElementById('categorySelect');
+                const selectedCategory = categorySelect.value;
                 console.log('카카오 API 검색 결과:', {
-                    query: selectedCategory === '빵' ? '빵집 + 베이커리' : selectedCategory,
+                    query: selectedCategory === '빵' ? '빵집 + 베이커리 + 강제 포함 키워드' : selectedCategory,
                     address: address,
-                    count: cafeData.documents?.length || 0,
-                    results: cafeData.documents?.map(doc => ({
+                    count: allResults.length,
+                    results: allResults.slice(0, 5).map(doc => ({
                         name: doc.place_name,
                         category: doc.category_name,
                         address: doc.address_name
-                    })) || []
+                    }))
                 });
+                
+                // 디버깅: 강제 포함 키워드 매장 확인
+                const forceIncludedBakeries = allResults.filter(doc => 
+                    isForceIncludedBakery(doc.place_name)
+                );
+                if (forceIncludedBakeries.length > 0) {
+                    console.log('강제 포함 키워드 매장 발견:', forceIncludedBakeries.map(doc => ({
+                        name: doc.place_name,
+                        category: doc.category_name,
+                        keyword: FORCE_INCLUDE_KEYWORDS.find(kw => doc.place_name.toLowerCase().includes(kw.toLowerCase()))
+                    })));
+                }
 
-                if (!cafeData.documents || cafeData.documents.length === 0) {
+                if (allResults.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
 
-                // 3단계: 빵집 카테고리 필터링, 제외 목록 제외 및 거리 계산
-                // '빵집' 또는 '베이커리'로 검색한 결과는 기본적으로 빵집으로 간주하고, 명확히 제외할 카테고리만 제외
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        const categoryName = doc.category_name || '';
-                        const bakeryName = doc.place_name || '';
-                        const category = categoryName.toLowerCase();
-                        const name = bakeryName.toLowerCase();
-                        
-                        // 명확히 제외할 카테고리만 체크 (레스토랑, 음식점, 술집 등)
-                        const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
-                        const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
-                        
-                        // 제외 카테고리가 있으면 제외
-                        if (isExcluded) {
-                            console.log('필터링 제외 (제외 카테고리):', {
-                                name: bakeryName,
-                                category: categoryName
-                            });
-                            return false;
-                        }
-                        
-                        // '빵집' 또는 '베이커리'로 검색한 결과이므로, 제외 카테고리가 없으면 기본적으로 포함
-                        // (카테고리가 '카페'만 있어도 '빵집'/'베이커리'로 검색했으므로 포함)
-                        // 단, 매장명에 명확히 다른 업종 키워드가 있으면 제외
-                        const otherBusinessKeywords = ['치킨집', '피자집', '한식당', '중식당', '일식당', '양식당', '술집', '바', 'pub', 'restaurant'];
-                        const hasOtherBusiness = otherBusinessKeywords.some(keyword => name.includes(keyword));
-                        
-                        if (hasOtherBusiness) {
-                            console.log('필터링 제외 (다른 업종 키워드):', {
-                                name: bakeryName,
-                                category: categoryName
-                            });
-                            return false;
-                        }
-                        
-                        // 제외할 빵집 제외
-                        return !isExcludedBakery(bakeryName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조: road_address 객체 안에 address_name이 있음
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500) // 500m 이내만
-                    .sort((a, b) => a.distance - b.distance); // 거리순 정렬
+                // 3단계: 빵집 결과 처리 및 거리 계산 (공통 함수 사용)
+                const cafes = processBakeryResults(allResults, baseX, baseY);
 
-                // 디버깅: 필터링 후 결과 확인
+                // 디버깅: 필터링 후 결과 확인 (최적화: 상위 5개만)
                 console.log('필터링 후 빵집 결과:', {
                     count: cafes.length,
-                    results: cafes.map(cafe => ({
+                    results: cafes.slice(0, 5).map(cafe => ({
                         name: cafe.name,
                         category: cafe.categoryName,
                         distance: Math.round(cafe.distance)
@@ -1157,120 +1329,9 @@
                     return;
                 }
 
-                // 도로명 주소가 없는 빵집들의 좌표로 주소 재조회 및 층 정보 가져오기
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    // 층 정보가 없으면 네이버 검색 API로 층 정보 가져오기
-                    if (!cafe.floor) {
-                        try {
-                            const searchQuery = cafe.displayAddress || cafe.roadAddress || cafe.address
-                                ? `${cafe.name} ${(cafe.displayAddress || cafe.roadAddress || cafe.address).split(' ').slice(0, 2).join(' ')}`
-                                : cafe.name;
-                            
-                            const naverResult = await callNaverAPI('local', {
-                                query: searchQuery,
-                                display: 1,
-                                sort: 'random'
-                            });
-                            
-                            if (naverResult.items && naverResult.items.length > 0) {
-                                const item = naverResult.items[0];
-                                const title = (item.title || '').replace(/<[^>]*>/g, '');
-                                const address = (item.address || '').replace(/<[^>]*>/g, '');
-                                const roadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
-                                
-                                // 제목, 주소에서 층 정보 추출
-                                const floorFromTitle = extractFloorInfo(title);
-                                const floorFromAddress = extractFloorInfo(address + ' ' + roadAddress);
-                                cafe.floor = floorFromTitle || floorFromAddress || '';
-                            }
-                        } catch (error) {
-                            console.warn('층 정보 조회 실패:', cafe.name, error);
-                            cafe.floor = cafe.floor || '';
-                        }
-                    }
-                    
-                    return cafe;
-                }));
-
-                // 네이버 검색 가능 여부 확인 및 카테고리 확인 (카페만 필터링)
-                const cafesSearchable = [];
-                for (let i = 0; i < cafesWithAddress.length; i++) {
-                    const cafe = cafesWithAddress[i];
-                    // API 호출 제한을 위해 약간의 지연 추가 (초당 5개 제한 고려)
-                    if (i > 0 && i % 5 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                    
-                    try {
-                        const isSearchable = await isSearchableOnNaver(cafe);
-                        if (isSearchable) {
-                            cafesSearchable.push(cafe);
-                            console.log(`네이버 검색 가능 및 카테고리 "베이커리/빵집" 확인 완료 [${cafe.name}]`);
-                        } else {
-                            console.log(`네이버 검색 불가능 또는 카테고리가 "베이커리/빵집"이 아님 - 리스팅 제외 [${cafe.name}]`);
-                        }
-                    } catch (error) {
-                        console.warn('네이버 검색 가능 여부 확인 실패:', cafe.name, error);
-                        // 에러 발생 시 검색 가능한 것으로 간주하지 않음 (카테고리 확인 실패 시 제외)
-                        console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                    }
-                }
-
-                // 각 빵집에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
-                
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractBakeryKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
+                // 주소 재조회 및 네이버 검색 정보 조회 (공통 함수 사용)
+                const cafesWithAddress = await enrichCafesWithAddress(cafes);
+                const cafesWithKeywords = await processNaverSearchAndKeywords(cafesWithAddress);
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
@@ -1303,6 +1364,41 @@
         // 네이버 검색 결과 가져오기 (층 정보, 검색 가능 여부, 카테고리 확인 통합)
         async function getNaverSearchInfo(cafe) {
             try {
+                // 강제 포함 키워드가 있는 매장은 네이버 검색 가능 여부 확인을 우회하고 무조건 포함
+                if (isForceIncludedBakery(cafe.name)) {
+                    console.log('강제 포함 키워드 매장 - 네이버 검색 필터링 우회:', cafe.name);
+                    // 층 정보만 조회하고 검색 가능 여부는 true로 반환
+                    let floorInfo = cafe.floor || '';
+                    if (!floorInfo) {
+                        try {
+                            const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
+                            const searchQuery = address
+                                ? `${cafe.name} ${address.split(' ').slice(0, 2).join(' ')}`
+                                : cafe.name;
+                            
+                            const naverResult = await callNaverAPI('local', {
+                                query: searchQuery,
+                                display: 1,
+                                sort: 'random'
+                            });
+                            
+                            if (naverResult.items && naverResult.items.length > 0) {
+                                const item = naverResult.items[0];
+                                const title = (item.title || '').replace(/<[^>]*>/g, '');
+                                const resultAddress = (item.address || '').replace(/<[^>]*>/g, '');
+                                const resultRoadAddress = (item.roadAddress || '').replace(/<[^>]*>/g, '');
+                                
+                                const floorFromTitle = extractFloorInfo(title);
+                                const floorFromAddress = extractFloorInfo(resultAddress + ' ' + resultRoadAddress);
+                                floorInfo = floorFromTitle || floorFromAddress || '';
+                            }
+                        } catch (error) {
+                            console.warn('강제 포함 매장 층 정보 조회 실패:', cafe.name, error);
+                        }
+                    }
+                    return { isSearchable: true, floorInfo };
+                }
+                
                 const address = cafe.displayAddress || cafe.roadAddress || cafe.address || '';
                 
                 // 1차 검색: 매장명칭 + 주소
@@ -1658,142 +1754,38 @@
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
 
-                // 카카오 API로 500m 반경 내 장소 검색 (반경 검색 지원)
+                // 카카오 API로 500m 반경 내 장소 검색 (공통 함수 사용)
                 const radius = 500;
+                const allResults = await searchBakeriesFromKakaoAPI(baseX, baseY, radius);
+                
+                // 디버깅: 카카오 API 검색 결과 확인 (최적화: 상위 5개만)
                 const categorySelect = document.getElementById('categorySelect');
-                const selectedCategory = categorySelect.value; // 선택된 카테고리
-                // '빵'으로 검색하면 결과가 적을 수 있으므로 '빵집'과 '베이커리' 모두 검색
-                let allResults = [];
-                if (selectedCategory === '빵') {
-                    // '빵집'과 '베이커리' 모두 검색하여 결과 합치기
-                    const [bakeryData, breadData] = await Promise.all([
-                        callKakaoAPI('keyword', {
-                            query: '빵집',
-                            x: baseX,
-                            y: baseY,
-                            radius: radius,
-                            size: 15
-                        }),
-                        callKakaoAPI('keyword', {
-                            query: '베이커리',
-                            x: baseX,
-                            y: baseY,
-                            radius: radius,
-                            size: 15
-                        })
-                    ]);
-                    
-                    // 중복 제거를 위한 Set 사용
-                    const seen = new Set();
-                    const allDocs = [
-                        ...(bakeryData.documents || []),
-                        ...(breadData.documents || [])
-                    ];
-                    
-                    allResults = allDocs.filter(doc => {
-                        const key = `${doc.place_name}|${doc.x}|${doc.y}`;
-                        if (seen.has(key)) return false;
-                        seen.add(key);
-                        return true;
-                    });
-                } else {
-                    const cafeData = await callKakaoAPI('keyword', {
-                        query: selectedCategory,
-                        x: baseX,
-                        y: baseY,
-                        radius: radius,
-                        size: 15
-                    });
-                    allResults = cafeData.documents || [];
-                }
-                
-                const cafeData = { documents: allResults };
-                
-                // 디버깅: 카카오 API 검색 결과 확인
+                const selectedCategory = categorySelect.value;
                 console.log('카카오 API 검색 결과 (좌표 검색):', {
-                    query: selectedCategory === '빵' ? '빵집 + 베이커리' : selectedCategory,
-                    count: cafeData.documents?.length || 0,
-                    results: cafeData.documents?.map(doc => ({
+                    query: selectedCategory === '빵' ? '빵집 + 베이커리 + 강제 포함 키워드' : selectedCategory,
+                    count: allResults.length,
+                    results: allResults.slice(0, 5).map(doc => ({
                         name: doc.place_name,
                         category: doc.category_name
-                    })) || []
+                    }))
                 });
+                
+                // 디버깅: 강제 포함 키워드 매장 확인
+                const forceIncludedCount = allResults.filter(doc => 
+                    isForceIncludedBakery(doc.place_name)
+                ).length;
+                if (forceIncludedCount > 0) {
+                    console.log(`강제 포함 키워드 매장 발견 (좌표 검색): ${forceIncludedCount}개`);
+                }
 
-                if (!cafeData.documents || cafeData.documents.length === 0) {
+                if (allResults.length === 0) {
                     loadingEl.style.display = 'none';
                     showNoResults();
                     return;
                 }
 
-                // 빵집 카테고리 필터링, 제외 목록 제외 및 거리 계산
-                // '빵집' 또는 '베이커리'로 검색한 결과는 기본적으로 빵집으로 간주하고, 명확히 제외할 카테고리만 제외
-                const cafes = cafeData.documents
-                    .filter(doc => {
-                        const categoryName = doc.category_name || '';
-                        const bakeryName = doc.place_name || '';
-                        const category = categoryName.toLowerCase();
-                        const name = bakeryName.toLowerCase();
-                        
-                        // 명확히 제외할 카테고리만 체크 (레스토랑, 음식점, 술집 등)
-                        const excludedKeywords = ['레스토랑', 'restaurant', '음식점', '술집', '바', 'bar', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식', '마라탕', 'malatang'];
-                        const isExcluded = excludedKeywords.some(keyword => category.includes(keyword));
-                        
-                        // 제외 카테고리가 있으면 제외
-                        if (isExcluded) {
-                            console.log('필터링 제외 (제외 카테고리, 좌표 검색):', {
-                                name: bakeryName,
-                                category: categoryName
-                            });
-                            return false;
-                        }
-                        
-                        // '빵집' 또는 '베이커리'로 검색한 결과이므로, 제외 카테고리가 없으면 기본적으로 포함
-                        // (카테고리가 '카페'만 있어도 '빵집'/'베이커리'로 검색했으므로 포함)
-                        // 단, 매장명에 명확히 다른 업종 키워드가 있으면 제외
-                        const otherBusinessKeywords = ['치킨집', '피자집', '한식당', '중식당', '일식당', '양식당', '술집', '바', 'pub', 'restaurant'];
-                        const hasOtherBusiness = otherBusinessKeywords.some(keyword => name.includes(keyword));
-                        
-                        if (hasOtherBusiness) {
-                            console.log('필터링 제외 (다른 업종 키워드, 좌표 검색):', {
-                                name: bakeryName,
-                                category: categoryName
-                            });
-                            return false;
-                        }
-                        
-                        // 제외할 빵집 제외
-                        return !isExcludedBakery(bakeryName);
-                    })
-                    .map(doc => {
-                        const cafeX = parseFloat(doc.x);
-                        const cafeY = parseFloat(doc.y);
-                        const distance = calculateDistance(baseY, baseX, cafeY, cafeX);
-                        
-                        // 카카오 API 응답 구조
-                        const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                            ? doc.road_address.address_name 
-                            : '';
-                        const addr = doc.address_name || '';
-                        const placeName = doc.place_name || '';
-                        
-                        // 장소명에서 층 정보 추출
-                        const floorInfo = extractFloorInfo(placeName);
-                        
-                        return {
-                            name: placeName,
-                            address: addr, // 지번 주소
-                            roadAddress: roadAddr, // 도로명 주소
-                            displayAddress: roadAddr || addr, // 표시용 (도로명 우선)
-                            floor: floorInfo, // 층 정보
-                            x: cafeX,
-                            y: cafeY,
-                            distance: distance,
-                            categoryName: doc.category_name || '',
-                            doc: doc // 주소 재조회용
-                        };
-                    })
-                    .filter(cafe => cafe.distance <= 500)
-                    .sort((a, b) => a.distance - b.distance);
+                // 빵집 결과 처리 및 거리 계산 (공통 함수 사용)
+                const cafes = processBakeryResults(allResults, baseX, baseY);
 
                 if (cafes.length === 0) {
                     loadingEl.style.display = 'none';
@@ -1801,112 +1793,10 @@
                     return;
                 }
 
-                // 도로명 주소가 없는 카페들의 좌표로 주소 재조회
-                // 로딩 애니메이션은 이 작업이 완료될 때까지 유지
-                const cafesWithAddress = await Promise.all(cafes.map(async (cafe) => {
-                    // 도로명 주소가 없으면 좌표로 주소 조회
-                    if (!cafe.roadAddress && cafe.x && cafe.y) {
-                        try {
-                            const coordData = await callKakaoAPI('coord2address', {
-                                x: cafe.x,
-                                y: cafe.y
-                            });
-                            
-                            if (coordData.documents && coordData.documents.length > 0) {
-                                const doc = coordData.documents[0];
-                                const roadAddr = (doc.road_address && doc.road_address.address_name) 
-                                    ? doc.road_address.address_name 
-                                    : '';
-                                if (roadAddr) {
-                                    cafe.roadAddress = roadAddr;
-                                    cafe.displayAddress = roadAddr;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('주소 재조회 실패:', cafe.name, error);
-                        }
-                    }
-                    
-                    return cafe;
-                }));
 
-                // 네이버 검색 정보 조회 및 필터링 (층 정보 + 검색 가능 여부 + 카테고리 확인 통합)
-                // 배치 처리로 성능 개선 (5개씩 묶어서 병렬 처리)
-                const cafesSearchable = [];
-                const batchSize = 5;
-                
-                for (let i = 0; i < cafesWithAddress.length; i += batchSize) {
-                    const batch = cafesWithAddress.slice(i, i + batchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const { isSearchable, floorInfo } = await getNaverSearchInfo(cafe);
-                                
-                                if (isSearchable) {
-                                    // 층 정보 업데이트
-                                    if (floorInfo) {
-                                        cafe.floor = floorInfo;
-                                    }
-                                    console.log(`네이버 검색 가능 및 카테고리 "베이커리/빵집" 확인 완료 [${cafe.name}]`);
-                                    return cafe;
-                                } else {
-                                    console.log(`네이버 검색 불가능 또는 카테고리가 "베이커리/빵집"이 아님 - 리스팅 제외 [${cafe.name}]`);
-                                    return null;
-                                }
-                            } catch (error) {
-                                console.warn('네이버 검색 정보 조회 실패:', cafe.name, error);
-                                console.log(`네이버 검색 확인 실패로 인한 리스팅 제외 [${cafe.name}]`);
-                                return null;
-                            }
-                        })
-                    );
-                    
-                    // null이 아닌 결과만 추가 (성능 최적화: for...of 사용)
-                    for (const result of batchResults) {
-                        if (result) {
-                            cafesSearchable.push(result);
-                        }
-                    }
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + batchSize < cafesWithAddress.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
-
-                // 각 빵집에 대해 키워드 추출 (배치 처리로 성능 개선)
-                const cafesWithKeywords = [];
-                const keywordBatchSize = 5;
-                
-                for (let i = 0; i < cafesSearchable.length; i += keywordBatchSize) {
-                    const batch = cafesSearchable.slice(i, i + keywordBatchSize);
-                    
-                    // 배치 내에서 병렬 처리
-                    const batchResults = await Promise.all(
-                        batch.map(async (cafe) => {
-                            try {
-                                const keywords = await extractBakeryKeywords(
-                                    cafe.name,
-                                    cafe.displayAddress || cafe.roadAddress || cafe.address
-                                );
-                                console.log(`키워드 추출 완료 [${cafe.name}]:`, keywords);
-                                return { ...cafe, keywords: keywords || [] };
-                            } catch (error) {
-                                console.error('키워드 추출 실패:', cafe.name, error);
-                                return { ...cafe, keywords: [] };
-                            }
-                        })
-                    );
-                    
-                    cafesWithKeywords.push(...batchResults);
-                    
-                    // 배치 간 지연 (API 제한 고려, 마지막 배치는 지연 불필요)
-                    if (i + keywordBatchSize < cafesSearchable.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms로 단축
-                    }
-                }
+                // 주소 재조회 및 네이버 검색 정보 조회 (공통 함수 사용)
+                const cafesWithAddress = await enrichCafesWithAddress(cafes);
+                const cafesWithKeywords = await processNaverSearchAndKeywords(cafesWithAddress);
 
                 // 먼저 로딩 애니메이션 숨기기 (결과 표시 전에)
                 loadingEl.style.display = 'none';
