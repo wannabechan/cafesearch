@@ -610,8 +610,8 @@
         const MENU_CONFIGS = {
             '카페': {
                 categoryGroups: ['카페', '커피', '원두', 'cafe', 'coffee', '원두커피'],
-                excludedNames: ['스타벅스', '이디야', '컴포즈', '메가', 'MGC', '카페베네', '투썸', '매머드', '커피앳웍스', '백억커피', '할리스', '커피빈', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스', '백미당', '파스쿠찌', '텐퍼센트커피', '폴바셋'],
-                excludedCategoryKeywords: ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '한식', '중식', '일식', '양식'],
+                excludedNames: ['이디야', '컴포즈', '메가', 'MGC', '카페베네', '매머드', '백억커피', '빽다방', '방탈출', '요거트', '공차', '탐앤탐스', '파스쿠찌', '텐퍼센트커피'],
+                excludedCategoryKeywords: ['브런치', 'brunch', '레스토랑', 'restaurant', '술집', '바', 'bar', '펜션', '호텔', 'hotel', '치킨', 'chicken', '피자', 'pizza', '아이스크림', '요거트', '샐러드', '한식', '중식', '일식', '양식'],
                 superpassKeywords: [],
                 searchMessage: '지도에서 카페 검색 중...',
                 hasSupplementLogic: false
@@ -1231,7 +1231,7 @@
                 '김밥': '김밥 집'
             };
             const menuName = menuNames[selectedMenu] || '매장';
-            const suffix = selectedMenu === '카페' ? ' (프랜차이즈 제외)' : '';
+            const suffix = selectedMenu === '카페' ? ' (일부 프랜차이즈 제외)' : '';
             resultsHeader.textContent = `주변의 ${places.length}개 ${menuName}입니다.${suffix}`;
             resultsSection.style.display = 'block';
             
