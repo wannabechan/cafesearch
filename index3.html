@@ -367,8 +367,9 @@
             }
 
             .search-buttons {
-                flex-direction: column;
-                gap: 10px;
+                flex-direction: row;
+                flex-wrap: nowrap;
+                gap: 8px;
             }
 
             .category-select {
@@ -383,23 +384,26 @@
                 border-radius: 20px;
             }
 
-            .search-buttons {
-                flex-direction: column;
-                gap: 10px;
-            }
-
             .search-button {
-                padding: 14px 24px;
-                font-size: 16px;
+                flex: 0 0 auto;
+                padding: 14px 14px;
+                font-size: 15px;
                 border-radius: 20px;
-                width: 100%;
+                width: auto;
+                white-space: nowrap;
             }
 
             .location-button {
-                padding: 14px 18px;
+                flex: 0 0 48px;
+                width: 48px;
+                padding: 14px 0;
                 font-size: 20px;
                 border-radius: 20px;
-                width: 100%;
+            }
+
+            .category-select {
+                flex: 1 1 auto;
+                min-width: 0;
             }
 
             .cafe-item {
@@ -491,11 +495,13 @@
             }
 
             .search-button {
-                padding: 12px 20px;
+                padding: 12px 12px;
             }
 
             .location-button {
-                padding: 12px 16px;
+                width: 44px;
+                flex-basis: 44px;
+                padding: 12px 0;
             }
 
             .category-select {
