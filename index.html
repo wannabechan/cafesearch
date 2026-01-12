@@ -850,7 +850,7 @@
         // ============================================
         
         // 네이버 API로 매장 검색 (메뉴 연관 카테고리 그룹 + 주소 사용)
-        async function searchFromNaverAPI(baseX, baseY, baseAddress, radius = 750) {
+        async function searchFromNaverAPI(baseX, baseY, baseAddress, radius = 500) {
             const categoryGroups = getMenuCategoryGroups();
             const allResults = [];
             
@@ -994,7 +994,7 @@
         }
         
         // 카카오 API로 매장 검색 (보조용 - 필요시 사용)
-        async function searchFromKakaoAPI(baseX, baseY, radius = 750) {
+        async function searchFromKakaoAPI(baseX, baseY, radius = 500) {
             const categoryGroups = getMenuCategoryGroups();
             const allResults = [];
             
@@ -1272,8 +1272,8 @@
 
 
         // 매장 검색 및 처리 공통 함수 (중복 제거)
-        async function searchAndProcessPlaces(baseX, baseY, baseAddress, radius = 750) {
-            // 4단계: 카카오 API로 정확한 반경 검색 (750m 이내만 검색)
+        async function searchAndProcessPlaces(baseX, baseY, baseAddress, radius = 500) {
+            // 4단계: 카카오 API로 정확한 반경 검색 (500m 이내만 검색)
             updateProgress(30, getSearchMessage());
             const kakaoResults = await searchFromKakaoAPI(baseX, baseY, radius);
             console.log('카카오 검색 결과:', kakaoResults.length, '개');
@@ -1346,10 +1346,10 @@
             // 거리순 재정렬
             placesWithAddress.sort((a, b) => a.distance - b.distance);
             
-            // 750m 이내만 최종 포함
-            // 카카오 API는 정확한 반경 검색이므로 750m 이내만 필터링
+            // 500m 이내만 최종 포함
+            // 카카오 API는 정확한 반경 검색이므로 500m 이내만 필터링
             const placesFilteredByDistance = placesWithAddress.filter(place => {
-                return place.distance <= radius; // 750m
+                return place.distance <= radius; // 500m
             });
             console.log('최종 거리 필터링 후:', placesFilteredByDistance.length, '개');
             
@@ -1374,24 +1374,28 @@
             const result = await processNaverSearchAndFilter(placesFilteredByDistance, false); // 카카오 검색 결과이므로 정상 검증
             console.log('최종 검증 후 결과:', Array.isArray(result) ? result.length : (result.placesSearchable?.length || 0), '개');
             
-            // 국밥의 경우 보완 로직 실행
-            if (hasSupplementLogic()) {
-                const { placesSearchable, placesExcluded } = result;
-                
-                // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가
-                updateProgress(85, '추가 매장 검색 중...');
-                const supplementedPlaces = await supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius);
-                
-                // 최종 리스팅: 기존 검색 가능한 매장 + 보완된 한식 매장
-                const finalPlaces = [...placesSearchable, ...supplementedPlaces];
-                // 거리순으로 재정렬
-                finalPlaces.sort((a, b) => a.distance - b.distance);
-                
-                return finalPlaces;
-            }
+            // 국밥의 경우 보완 로직 실행 (추가 매장 검색 과정 생략)
+            // if (hasSupplementLogic()) {
+            //     const { placesSearchable, placesExcluded } = result;
+            //     
+            //     // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가
+            //     updateProgress(85, '추가 매장 검색 중...');
+            //     const supplementedPlaces = await supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius);
+            //     
+            //     // 최종 리스팅: 기존 검색 가능한 매장 + 보완된 한식 매장
+            //     const finalPlaces = [...placesSearchable, ...supplementedPlaces];
+            //     // 거리순으로 재정렬
+            //     finalPlaces.sort((a, b) => a.distance - b.distance);
+            //     
+            //     return finalPlaces;
+            // }
             
-            // 일반적인 경우 (카페, 마라탕, 빵집)
-            return result;
+            // 결과가 객체인 경우 (국밥 등) placesSearchable 배열만 반환, 배열인 경우 그대로 반환
+            if (Array.isArray(result)) {
+                return result;
+            } else {
+                return result.placesSearchable || [];
+            }
         }
 
         // 카페 검색
@@ -1424,7 +1428,7 @@
                 const location = addressData.documents[0];
                 const baseX = parseFloat(location.x);
                 const baseY = parseFloat(location.y);
-                const radius = 750;
+                const radius = 500;
                 
                 // 검색 기준 주소 (네이버 검색에 사용)
                 const searchBaseAddress = address;
@@ -1914,7 +1918,7 @@
         }
 
         // 리스팅 보완: 한식 매장 중 국밥 메뉴가 있는 매장 추가 (국밥 전용)
-        async function supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius = 750) {
+        async function supplementWithKoreanRestaurants(placesExcluded, baseX, baseY, radius = 500) {
             const supplementedPlaces = [];
             const batchSize = 5;
             
@@ -2057,7 +2061,7 @@
             cafeList.innerHTML = `
                 <li class="no-results">
                     <div class="no-results-title">검색 결과가 없습니다</div>
-                    <div class="no-results-text">750m 이내에 ${menuName}을(를) 찾을 수 없습니다.</div>
+                    <div class="no-results-text">500m 이내에 ${menuName}을(를) 찾을 수 없습니다.</div>
                 </li>
             `;
         }
@@ -2239,7 +2243,7 @@
             try {
                 const baseX = parseFloat(x);
                 const baseY = parseFloat(y);
-                const radius = 750;
+                const radius = 500;
                 
                 // 검색 기준 주소 (네이버 검색에 사용)
                 const searchBaseAddress = addressName || '';
